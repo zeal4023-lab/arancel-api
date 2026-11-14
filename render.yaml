@@ -1,0 +1,34 @@
+# Blueprint de Render: https://render.com/docs/blueprint-spec
+# Uso: en Render -> "New" -> "Blueprint" -> conecta el repo de GitHub.
+# OPENAI_API_KEY se deja con sync:false para que Render lo pida en el panel
+# (NUNCA va en el repositorio).
+services:
+  - type: web
+    name: arancel-api
+    runtime: docker
+    plan: free
+    region: oregon
+    healthCheckPath: /healthz
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_BASE_URL
+        value: https://api.groq.com/openai/v1
+      - key: VISION_MODEL
+        value: qwen/qwen3.8-27b
+      - key: TEXT_MODEL
+        value: qwen/qwen3.8-27b
+      - key: VERIFY_MODEL
+        value: qwen/qwen3.8-27b
+      - key: TOP_K
+        value: "25"
+      - key: VERIFY_ENABLED
+        value: "false"
+      - key: LLM_MAX_TOKENS
+        value: "700"
+      - key: LLM_TIMEOUT_S
+        value: "90"
+      - key: CORS_ORIGINS
+        value: "*"
+      - key: ALLOW_MOCK
+        value: "false"
