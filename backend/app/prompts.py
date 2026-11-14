@@ -30,6 +30,10 @@ Reglas:
    solo una parte no reconocible), marca es_identificable=false y explica por qué.
    No adivines para "rellenar".
 7. No repitas el encuadre ni el fondo; ve al producto.
+8. Describe el PRODUCTO completo como un todo (tipo, uso, materia, estado). No
+   describas el entorno (pisos, muros, techos, lonas, escombros, personas,
+   otros objetos) ni listes solo partes visibles (faros, parrilla, parabrisas)
+   como si fueran el producto.
 8. Español neutro, 50-110 palabras, sin adjetivos publicitarios.
 
 Devuelve SOLO este JSON:
