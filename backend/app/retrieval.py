@@ -14,7 +14,8 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass
 from typing import Iterable
 
-from .normalize import expand_query, normalize, normalize_code, tokenize
+from .equivalencias import indices_por_codigo
+from .normalize import expand_query, is_residual, normalize, normalize_code, tokenize
 from .preprocess import CatalogNode, LEVEL_ORDER
 
 
@@ -26,9 +27,10 @@ class Candidate:
     keyword_hits: int
     exact_phrase: bool
     score_norm: float = 0.0
+    nota: str = ""
 
     def to_prompt_dict(self) -> dict:
-        return {
+        data = {
             "codigo": self.node.codigo,
             "nivel": self.node.nivel,
             "descripcion": self.node.descripcion,
@@ -36,6 +38,9 @@ class Candidate:
             "es_residual": self.node.is_residual,
             "confianza_busqueda": round(self.score_norm, 3),
         }
+        if self.nota:
+            data["nota"] = self.nota
+        return data
 
 
 class BM25Retriever:
@@ -46,9 +51,30 @@ class BM25Retriever:
         self.doc_len = [0.0] * len(nodes)
         self.kw_sets: list[frozenset[str]] = []
         self.heading: list[str] = []
+        self.notas: dict[int, str] = {}
+        equivalencias = indices_por_codigo()
 
         df: Counter[str] = Counter()
         for i, node in enumerate(nodes):
+            # 1. Recalcular el marcado de residual: el catalogo generado puede
+            #    tener falsos positivos heredados del titulo de la partida.
+            node.is_residual = is_residual(node.descripcion)
+
+            # 2. Enriquecer con terminos de notas explicativas (perro/gato...).
+            #    Se inyecta en el indice en tiempo de carga: catalog.json no
+            #    se toca y descripcion/nivel/av siguen siendo los oficiales.
+            extra = equivalencias.get(node.codigo_digitos)
+            if extra:
+                terminos, nota = extra
+                node.tokens = {
+                    **node.tokens,
+                    **{t: max(node.tokens.get(t, 0.0), 3.0) for t in terminos},
+                }
+                node.palabras_clave = list(dict.fromkeys(
+                    [*node.palabras_clave, *terminos]
+                ))
+                self.notas[i] = nota
+
             self.doc_len[i] = sum(node.tokens.values()) or 1.0
             for term, tf in node.tokens.items():
                 self.postings[term].append((i, tf))
@@ -187,7 +213,8 @@ class BM25Retriever:
             # los nodos más profundos son más específicos y preferibles
             score *= 1.0 + 0.012 * (node.specificity - 6)
 
-            cands.append(Candidate(node, score, base, kw_hits, bool(exact)))
+            cands.append(Candidate(node, score, base, kw_hits, bool(exact),
+                                   nota=self.notas.get(doc_i, "")))
 
         cands.sort(key=lambda c: c.score, reverse=True)
         cands = cands[:pool]

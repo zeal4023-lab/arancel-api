@@ -285,7 +285,9 @@ class ClassificationService:
         completeness = 100.0 - min(60.0, 20.0 * len(missing))
         final = 0.60 * llm_conf + 0.25 * retrieval_conf + 0.15 * completeness
         final = min(final, llm_conf + 25)       # el retrieval no "infla" solo
-        if node.is_residual:
+        # Un residual justificado por nota explicativa NO se penaliza: es la
+        # línea correcta (p. ej. perros/gatos en 0106.19.00.00).
+        if node.is_residual and not cand.nota:
             specific = [c for c in cands
                         if not c.node.is_residual and c.score >= cand.score * 0.92]
             if specific:

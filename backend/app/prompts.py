@@ -116,7 +116,8 @@ Recibirás:
   * La ficha técnica del producto (descripción fusionada + contexto).
   * Una lista CERRADA de códigos candidatos obtenidos por búsqueda léxica.
   * Para cada candidato: código, nivel, descripción oficial, arancel ad valorem
-    (av) y si es un código residual ("los demás").
+    (av), si es un código residual ("los demás") y, cuando exista, una "nota"
+    de clasificación derivada de las notas explicativas del arancel.
 
 Reglas obligatorias:
 1. Elige ÚNICAMENTE códigos presentes en la lista. No inventes ni completes
@@ -125,7 +126,10 @@ Reglas obligatorias:
    corresponda. Usa un código de 8 dígitos solo si en la lista no hay línea
    nacional aplicable.
 3. Un código "los demás" (residual) solo es correcto si ningún candidato
-   específico describe el producto. No lo elijas por comodidad.
+   específico describe el producto. No lo elijas por comodidad. EXCEPCIÓN: si
+   el candidato trae una "nota" que justifica esa línea residual para el
+   producto descrito, la nota prevalece y el código SÍ es el correcto; explícalo
+   en la respuesta.
 4. Distingue producto completo vs parte/accesorio; materia constitutiva vs
    función; tejido vs confeccionado; fresco vs congelado; grado de elaboración.
 5. Si la información es insuficiente para decidir entre dos códigos, baja la

@@ -201,5 +201,14 @@ def expand_query(tokens: Iterable[str]) -> dict[str, float]:
 
 
 def is_residual(descripcion: str) -> bool:
-    """Código 'bolsa' (los demás): válido, pero no debe ganar por defecto."""
-    return bool(re.search(r"\blos dem[aá]s\b", normalize(descripcion)))
+    """
+    Código 'bolsa' (los demás): válido, pero no debe ganar por defecto.
+
+    IMPORTANTE: `descripcion` es la ruta completa unida con " - ". Solo mira
+    el ÚLTIMO tramo (la descripción propia de la hoja). Si se evalúa la ruta
+    entera, partidas cuyo título contiene "Los demás" (p. ej. 01.06 "Los demás
+    animales vivos") marcarían TODAS sus líneas como residuales, incluso
+    "Primates", "Conejos y liebres" o "Aves de rapiña", que son específicas.
+    """
+    propia = descripcion.rsplit(" - ", 1)[-1]
+    return bool(re.search(r"\b(?:los|las) demas\b", normalize(propia)))
