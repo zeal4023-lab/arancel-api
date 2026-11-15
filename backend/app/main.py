@@ -19,6 +19,7 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, File, HTTPException, Query, UploadFile
+from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import settings
@@ -87,7 +88,11 @@ async def describe(image: UploadFile = File(...)) -> VisionOut:
     if len(data) > MAX_IMAGE_BYTES:
         raise HTTPException(413, "Imagen demasiado grande (máx. 8 MB).")
     try:
-        result = svc().describe_image(base64.b64encode(data).decode("ascii"))
+        # La llamada a la IA es bloqueante: se ejecuta en un hilo aparte para
+        # no congelar el servidor (y que el health check siga respondiendo).
+        result = await run_in_threadpool(
+            svc().describe_image, base64.b64encode(data).decode("ascii")
+        )
     except LLMError as exc:
         raise HTTPException(502, f"El servicio de visión falló: {exc}") from exc
     return VisionOut(**result)
