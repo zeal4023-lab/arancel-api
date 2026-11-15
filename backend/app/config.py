@@ -43,6 +43,9 @@ class Settings:
     # --- Calibración de confianza ------------------------------------------
     confidence_high: int = _env_int("CONFIDENCE_HIGH", 80)
     confidence_medium: int = _env_int("CONFIDENCE_MEDIUM", 60)
+    # Por debajo de este valor se repite la búsqueda usando la pista de "Revisar".
+    # 0 desactiva la segunda búsqueda.
+    confidence_retry: int = _env_int("CONFIDENCE_RETRY", 60)
 
     # --- Robustez -----------------------------------------------------------
     llm_timeout_s: float = float(os.getenv("LLM_TIMEOUT_S", "45"))

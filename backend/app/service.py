@@ -177,24 +177,42 @@ class ClassificationService:
             )
 
         # --- Paso C: clasificación --------------------------------------
-        user_prompt = CLASSIFY_USER.format(
-            descripcion_fusionada=fused,
-            contexto_json=json.dumps(contexto.to_prompt(), ensure_ascii=False),
-            candidatos_json=json.dumps(
-                [c.to_prompt_dict() for c in cands], ensure_ascii=False
-            ),
-        )
-        raw = self.llm.json(
-            system=CLASSIFY_SYSTEM, user=user_prompt, schema=CLASSIFY_SCHEMA,
-            name="classify", model=self.cfg.text_model,
-        )
-
+        raw = self._classify_pass(fused, contexto, cands)
         result = self._validate_and_calibrate(raw, cands, fused)
+
+        # --- Paso C2: segunda búsqueda si la confianza es baja ----------
+        # Usa la pista del texto "Revisar" para ampliar candidatos. El LLM
+        # sigue limitado a códigos del catálogo; la pista nunca los inventa.
+        segunda = {"activada": False}
+        hint = (raw.get("advertencia") or "").strip()
+        if (self.cfg.confidence_retry > 0
+                and result.confianza < self.cfg.confidence_retry and hint):
+            extra = self.retriever.search(
+                f"{fused} {hint}",
+                context=contexto.to_search_text(),
+                top_k=top_k,
+                max_per_heading=self.cfg.max_per_heading,
+            )
+            por_codigo = self._codes_in_hint(hint)
+            merged = self._merge_candidates(cands, extra + por_codigo, top_k)
+            added = [c.node.codigo for c in merged if c.node.codigo_digitos not in
+                     {x.node.codigo_digitos for x in cands}]
+            segunda = {"activada": True, "umbral": self.cfg.confidence_retry,
+                       "confianza_previa": result.confianza, "pista": hint,
+                       "candidatos_añadidos": added}
+            if added:
+                cands = merged
+                raw = self._classify_pass(
+                    f"{fused}\n\nNota de revisión: {hint}", contexto, cands
+                )
+                result = self._validate_and_calibrate(raw, cands, fused)
+        
         result.informacion_faltante = self._dedupe(
             list(result.informacion_faltante) + list(fusion.get("informacion_faltante") or [])
         )
         result.trazabilidad.update({
             "fusion": fusion,
+            "segunda_busqueda": segunda,
             "candidatos": [
                 {"codigo": c.node.codigo, "score": round(c.score_norm, 3),
                  "residual": c.node.is_residual}
@@ -248,6 +266,49 @@ class ClassificationService:
             )
 
     # ------------------------------------------------------------------
+    def _classify_pass(self, fused: str, contexto: "ProductContext",
+                       cands: list) -> dict[str, Any]:
+        user_prompt = CLASSIFY_USER.format(
+            descripcion_fusionada=fused,
+            contexto_json=json.dumps(contexto.to_prompt(), ensure_ascii=False),
+            candidatos_json=json.dumps(
+                [c.to_prompt_dict() for c in cands], ensure_ascii=False
+            ),
+        )
+        return self.llm.json(
+            system=CLASSIFY_SYSTEM, user=user_prompt, schema=CLASSIFY_SCHEMA,
+            name="classify", model=self.cfg.text_model,
+        )
+
+    def _codes_in_hint(self, hint: str) -> list:
+        """Códigos citados en la pista que EXISTEN en el catálogo oficial."""
+        from .retrieval import Candidate
+        found = []
+        vistos: set[str] = set()
+        for match in re.findall(r"\d{4}\.\d{2}(?:\.\d{2}(?:\.\d{2})?)?", hint):
+            digits = normalize_code(match)
+            for node in self.retriever.nodes:
+                if node.codigo_digitos.startswith(digits) and node.is_leaf \
+                        and node.codigo_digitos not in vistos:
+                    vistos.add(node.codigo_digitos)
+                    found.append(Candidate(node, 0.0, 0.0, 0, True, 0.5))
+                    if len(found) >= 5:
+                        return found
+        return found
+
+    @staticmethod
+    def _merge_candidates(primero: list, segundo: list, limite: int) -> list:
+        """Une candidatos sin duplicar, manteniendo el orden de la primera búsqueda."""
+        out: list = []
+        vistos: set[str] = set()
+        for cand in [*primero, *segundo]:
+            key = cand.node.codigo_digitos
+            if key in vistos:
+                continue
+            vistos.add(key)
+            out.append(cand)
+        return out[: limite + 10]
+
     def _validate_and_calibrate(
         self, raw: dict[str, Any], cands: list[Candidate], fused: str
     ) -> ClassificationResult:
