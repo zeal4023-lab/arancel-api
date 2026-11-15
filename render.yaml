@@ -32,3 +32,5 @@ services:
         value: "*"
       - key: ALLOW_MOCK
         value: "false"
+      - key: CONFIDENCE_RETRY
+        value: "0"
