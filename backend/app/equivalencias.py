@@ -32,6 +32,19 @@ EQUIVALENCIAS: dict[str, dict] = {
             "Es la linea correcta, no un residual elegido por comodidad."
         ),
     },
+    "8528.72.00.00": {
+        "terminos": (
+            "televisor", "televisores", "television", "televisiones", "tv",
+            "tele", "led", "lcd", "plasma", "pantalla plana", "pantalla de cristal",
+            "smart tv", "monitor de television",
+        ),
+        "nota": (
+            "Televisor completo a color con pantalla integrada (LCD, LED o "
+            "plasma): 8528.72.00.00. El 8528.71 es para aparatos que NO "
+            "incorporan pantalla de visualizacion; el 8528.73 es para los "
+            "monocromos."
+        ),
+    },
 }
 
 
