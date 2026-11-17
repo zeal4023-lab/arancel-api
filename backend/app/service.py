@@ -123,6 +123,9 @@ class ClassificationService:
             fusion = self.llm.json(
                 system=FUSION_SYSTEM, user=user_prompt, schema=FUSION_SCHEMA,
                 name="fusion", model=self.cfg.text_model,
+                # Salida corta: libera el presupuesto OTPM del plan gratuito
+                # para la clasificación (la llamada que más tokens necesita).
+                max_tokens=self.cfg.fusion_max_tokens or None,
             )
         except LLMError as exc:
             # Degradación elegante: la búsqueda sigue funcionando sin fusión.
@@ -159,9 +162,20 @@ class ClassificationService:
         contexto = contexto or ProductContext()
         top_k = top_k or self.cfg.top_k
 
-        fusion = (self.fuse(descripcion_ia, descripcion_usuario, contexto)
-                  if fuse_first else {"descripcion_fusionada": descripcion_ia,
-                                      "informacion_faltante": []})
+        aporte_usuario = bool((descripcion_usuario or "").strip())
+        contexto_texto = contexto.to_search_text().strip()
+        if not fuse_first:
+            fusion = {"descripcion_fusionada": descripcion_ia,
+                      "informacion_faltante": [], "modo": "omitida"}
+        elif aporte_usuario or contexto_texto:
+            fusion = self.fuse(descripcion_ia, descripcion_usuario, contexto)
+            fusion["modo"] = "llm"
+        else:
+            # Vía rápida: sin aporte del usuario ni contexto no hay nada que
+            # fusionar; se ahorra la llamada LLM (1-3 s y tokens del plan gratis).
+            fusion = {"descripcion_fusionada": descripcion_ia,
+                      "informacion_faltante": [], "conflictos": [],
+                      "modo": "local (sin aporte del usuario)"}
         fused = fusion["descripcion_fusionada"]
 
         # --- Paso B: candidatos -----------------------------------------
@@ -222,7 +236,14 @@ class ClassificationService:
             "catalogo": self.meta,
         })
 
-        if verify if verify is not None else self.cfg.verify_enabled:
+        do_verify = verify if verify is not None else self.cfg.verify_enabled
+        # Verificación condicional (P3): solo los casos dudosos pagan la
+        # llamada extra. Con CONFIDENCE_VERIFY=60, un resultado de 60+ va
+        # directo al usuario; por debajo se pide segunda opinión.
+        if (do_verify and self.cfg.confidence_verify > 0
+                and result.confianza >= self.cfg.confidence_verify):
+            do_verify = False
+        if do_verify:
             self._maybe_verify(result, fused, cands)
 
         return result

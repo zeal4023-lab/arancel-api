@@ -51,6 +51,7 @@ class LLMClient(ABC):
         image_b64: str | None = None,
         model: str | None = None,
         temperature: float = 0.0,
+        max_tokens: int | None = None,
     ) -> dict[str, Any]:
         ...
 
@@ -160,7 +161,8 @@ class OpenAILLM(LLMClient):
 
     def json(self, *, system: str, user: str, schema: dict, name: str,
              image_b64: str | None = None, model: str | None = None,
-             temperature: float = 0.0) -> dict[str, Any]:
+             temperature: float = 0.0,
+             max_tokens: int | None = None) -> dict[str, Any]:
         content: list[dict[str, Any]] = [{"type": "text", "text": user}]
         if image_b64:
             image: dict[str, Any] = {
@@ -194,8 +196,10 @@ class OpenAILLM(LLMClient):
             )
 
         extra: dict[str, Any] = {}
-        if self.cfg.llm_max_output_tokens:
-            extra["max_tokens"] = self.cfg.llm_max_output_tokens
+        # max_tokens por llamada (p. ej. fusión) tiene prioridad sobre el tope
+        # global LLM_MAX_TOKENS; el tope global queda para el resto.
+        if max_tokens or self.cfg.llm_max_output_tokens:
+            extra["max_tokens"] = max_tokens or self.cfg.llm_max_output_tokens
 
         last_exc: Exception | None = None
         for attempt in range(self.cfg.llm_max_retries + 1):
@@ -249,7 +253,8 @@ class MockLLM(LLMClient):
 
     def json(self, *, system: str, user: str, schema: dict, name: str,
              image_b64: str | None = None, model: str | None = None,
-             temperature: float = 0.0) -> dict[str, Any]:
+             temperature: float = 0.0,
+             max_tokens: int | None = None) -> dict[str, Any]:
         if name == "vision":
             return {
                 "es_identificable": True,

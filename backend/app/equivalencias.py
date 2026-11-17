@@ -45,6 +45,76 @@ EQUIVALENCIAS: dict[str, dict] = {
             "monocromos."
         ),
     },
+    # --- Pava / tetera / hervidor (caso real nov 2026) --------------------
+    # El texto oficial de 7615.10 no nombra "pava" ni "tetera". La diferencia
+    # con 7612 es el USO: cocinar (7615) vs almacenar/transportar (7612).
+    "7615.10.20.00": {
+        "terminos": (
+            "pava", "pavas", "tetera", "teteras", "hervidor", "hervidores",
+            "hervir", "fuego", "cocina", "cocinar", "estufa",
+        ),
+        "nota": (
+            "Articulos de uso domestico de aluminio para COCINAR: pavas, "
+            "teteras, hervidores, ollas y sartenes van en 7615.10; una pava "
+            "o tetera para estufa corresponde a 7615.10.20.00 ('las demas "
+            "ollas, sartenes y articulos similares'). NO es 7612: esa "
+            "partida es para recipientes que almacenan o transportan "
+            "mercancia (tambores, bidones), no utensilios de cocina."
+        ),
+    },
+    "7615.10.80.00": {
+        "terminos": (
+            "pava", "pavas", "tetera", "teteras", "hervidor", "hervidores",
+            "cocina", "cocinar", "estufa", "domestico",
+        ),
+        "nota": (
+            "Articulo de uso domestico de aluminio para cocinar que no "
+            "encaja en 'ollas, sartenes y similares' (7615.10.20.00). "
+            "Ejemplo: hervidores o pavas de forma especial. NO es 7612 "
+            "(recipientes de almacenamiento/transporte)."
+        ),
+    },
+    # --- Vehiculo turismo a gasolina 1000-1500 cc (caso real nov 2026) ----
+    "8703.22.10.00": {
+        "terminos": (
+            "sedan", "sedanes", "hatchback", "gasolina", "turismo",
+            "pasajeros", "cilindrada", "1400", "4x4",
+        ),
+        "nota": (
+            "Vehiculo de turismo a gasolina de cilindrada 1.000-1.500 cm3 "
+            "(p. ej. 1400 cc): partida 8703.22. Con traccion en las cuatro "
+            "ruedas (4x4) es 8703.22.10.00; si es 4x2 (dos ruedas), es "
+            "8703.22.90.20. Si la cilindrada fuera menor a 1.000 cc usar "
+            "8703.21; si fuera mayor a 1.500 cc, 8703.23."
+        ),
+    },
+    "8703.22.90.20": {
+        "terminos": (
+            "sedan", "sedanes", "hatchback", "gasolina", "turismo",
+            "pasajeros", "cilindrada", "1400", "ensamblado",
+        ),
+        "nota": (
+            "Vehiculo de turismo a gasolina de cilindrada 1.000-1.500 cm3 "
+            "(p. ej. 1400 cc), de traccion en dos ruedas (4x2): "
+            "8703.22.90.20 (los demas ensamblados). Solo si es 4x4 el "
+            "codigo es 8703.22.10.00."
+        ),
+    },
+    # --- Mesa de plastico para camping (MISS historico) -------------------
+    # El texto oficial dice solo "muebles de plastico"; la consulta dice
+    # "mesa ... camping" y 3924 (vajilla de uso domestico) la desplaza.
+    "9403.70.00.00": {
+        "terminos": (
+            "mesa", "mesas", "camping", "campament",
+            "plegable", "jardin", "exterior", "terraza",
+        ),
+        "nota": (
+            "Mesas y sillas de plastico para exterior o camping son "
+            "MUEBLES de plastico (9403.70.00.00), no articulos de uso "
+            "domestico de vajilla (partida 39.24). Si el mueble es de "
+            "metal, seria 9403.20.00.00."
+        ),
+    },
 }
 
 

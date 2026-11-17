@@ -58,6 +58,13 @@ class Settings:
         if os.getenv("LLM_MAX_TOKENS", "").isdigit()
         else None
     )
+    # La fusión produce una salida corta. Limitarla aparte evita que
+    # fusión + clasificación sumen más que el límite OTPM del plan gratuito
+    # (Groq ~1000 tokens de salida por minuto) y provoque 429 con reintentos.
+    fusion_max_tokens: int = _env_int("LLM_FUSION_MAX_TOKENS", 250)
+    # Verificación condicional: con VERIFY_ENABLED=true, solo se verifica
+    # cuando la confianza queda por debajo de este valor. 0 = verificar siempre.
+    confidence_verify: int = _env_int("CONFIDENCE_VERIFY", 60)
     verify_enabled: bool = os.getenv("VERIFY_ENABLED", "true").lower() == "true"
 
     # Si no hay API key, el backend usa un proveedor simulado (solo para dev).

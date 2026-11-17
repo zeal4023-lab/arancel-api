@@ -66,11 +66,10 @@ SYNONYMS: dict[str, tuple[str, ...]] = {
     "lcd": ("pantalla", "visualizacion", "display"),
     "plasma": ("pantalla", "visualizacion", "display"),
     "pava": ("olla", "domestico", "cocina"),
-    "pavas": ("olla", "domestico", "cocina"),
-    "tetera": ("olla", "domestico", "cocina"),
-    "teteras": ("olla", "domestico", "cocina"),
+    # CLAVE EN FORMA STEM: stem() reduce tetera/teteras a "teter".
+    # Una clave como "tetera" nunca emparejaria y seria una entrada muerta.
+    "teter": ("olla", "domestico", "cocina"),
     "hervidor": ("olla", "domestico", "cocina"),
-    "hervidores": ("olla", "domestico", "cocina"),
     "foco": ("lampara", "bombilla"),
     "bombilla": ("lampara",),
     "cargador": ("cargador", "electrico"),
