@@ -23,14 +23,19 @@ services:
       - key: TOP_K
         value: "25"
       - key: VERIFY_ENABLED
-        value: "false"
+        value: "true"
+      # P3: solo se verifica cuando la confianza sale por debajo de 60.
+      - key: CONFIDENCE_VERIFY
+        value: "60"
       - key: LLM_MAX_TOKENS
         value: "700"
+      - key: LLM_FUSION_MAX_TOKENS
+        value: "250"
+      - key: CONFIDENCE_RETRY
+        value: "0"
       - key: LLM_TIMEOUT_S
         value: "90"
       - key: CORS_ORIGINS
         value: "*"
       - key: ALLOW_MOCK
         value: "false"
-      - key: CONFIDENCE_RETRY
-        value: "0"
