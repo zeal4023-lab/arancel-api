@@ -1,0 +1,15 @@
+name: keep-alive
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Despertar API en Render
+        run: |
+          curl -fsS --max-time 60 https://arancel-api-q3o9.onrender.com/healthz \
+            && echo "API despierta" \
+            || echo "API no respondio (se reintentara en el siguiente ciclo)"
