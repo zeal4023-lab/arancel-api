@@ -100,6 +100,25 @@ EQUIVALENCIAS: dict[str, dict] = {
             "codigo es 8703.22.10.00."
         ),
     },
+    # --- Raton / mouse de computadora (caso real nov 2026) -----------------
+    # El texto oficial no dice "raton": dice "teclados, dispositivos por
+    # coordenadas x-y". Sin este puente, "raton" no aparece en el top 40 y
+    # ademas "computadora" arrastra a 8471.41 (equipo completo).
+    "8471.60.20.00": {
+        "terminos": (
+            "raton", "ratones", "mouse", "mouses", "trackball", "touchpad",
+            "coordenadas x-y", "teclado", "teclados", "entrada",
+        ),
+        "nota": (
+            "Unidad de entrada de computadora (raton, mouse, teclado, "
+            "trackball, touchpad) = 8471.60.20.00 ('teclados, dispositivos "
+            "por coordenadas x-y'). NO es 8471.41.00.00: esa linea es un "
+            "equipo completo con unidad central de proceso, entrada y salida "
+            "en la misma envoltura. Si el dispositivo de entrada no es "
+            "teclado ni dispositivo x-y, la alternativa es 8471.60.90.00. "
+            "OJO: 8471.60.00.00 no existe en el arancel peruano."
+        ),
+    },
     # --- Mesa de plastico para camping (MISS historico) -------------------
     # El texto oficial dice solo "muebles de plastico"; la consulta dice
     # "mesa ... camping" y 3924 (vajilla de uso domestico) la desplaza.

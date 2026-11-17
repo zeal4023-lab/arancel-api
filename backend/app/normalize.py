@@ -58,6 +58,10 @@ SYNONYMS: dict[str, tuple[str, ...]] = {
     "smartphone": ("telefono", "movil"),
     "smartphones": ("telefono", "movil"),
     "usb": ("memoria", "almacenamiento"),
+    # Ratón/mouse -> lenguaje del arancel: "dispositivos por coordenadas x-y".
+    # Claves en forma stem: raton/ratones -> "raton"; mouse/mouses -> "mouse".
+    "raton": ("mouse", "entrada", "coordenada"),
+    "mouse": ("entrada", "coordenada"),
     "tv": ("television",),
     "tele": ("television",),
     "televisor": ("television",),
