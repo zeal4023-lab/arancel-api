@@ -1,0 +1,48 @@
+{
+  "meta": {
+    "version": "1.0",
+    "nota": "Casos de validacion contra DAM real. Un caso solo cuenta cuando `estado` pasa a 'validado' con las cifras de la liquidacion oficial (DUA/DAM).",
+    "donde_mirar_en_la_dam": {
+      "fob_usd": "Casilla 11.5 / valor FOB de la factura comercial (columna 'Valor FOB' del cuadro de liquidacion).",
+      "flete_usd": "Columna 'Flete' del cuadro de liquidacion (solo el tramo internacional).",
+      "seguro_usd": "Columna 'Seguro' del cuadro de liquidacion.",
+      "cif_dam": "Casilla 11.15 'Valor en Aduana' (CIF).",
+      "av_pct_dam": "Casilla de ad valorem / columna 'Ad Valorem' como porcentaje.",
+      "ad_valorem_dam": "Columna 'Ad Valorem' en USD.",
+      "igv_dam": "Columna 'IGV' en USD.",
+      "ipm_dam": "Columna 'IPM' en USD.",
+      "total_tributos_dam": "Casilla de total de tributos que se paga (sin percepcion).",
+      "percepcion_dam": "Columna 'Percepcion IGV' si existe. NO se suma al total de la F1.",
+      "tipo_cambio_dam": "Casilla 11.3 / tipo de cambio SUNAT venta aplicado."
+    }
+  },
+  "casos": [
+    {
+      "id": "plantilla",
+      "estado": "pendiente",
+      "nombre": "REEMPLAZAR: breve descripcion de la mercancia",
+      "dam": "Numero de DAM / DUA (opcional, solo referencia interna)",
+      "fecha_despacho": "AAAA-MM-DD",
+      "moneda": "USD",
+      "codigo": "0000.00.00.00",
+      "cantidad": 0,
+      "precio_unitario_fob": 0,
+      "flete_usd": 0,
+      "seguro_usd": 0,
+      "oficial_dam": {
+        "fob_usd": 0,
+        "flete_usd": 0,
+        "seguro_usd": 0,
+        "cif_dam": 0,
+        "av_pct_dam": 0,
+        "ad_valorem_dam": 0,
+        "igv_dam": 0,
+        "ipm_dam": 0,
+        "total_tributos_dam": 0,
+        "percepcion_dam": 0,
+        "tipo_cambio_dam": null
+      },
+      "nota": ""
+    }
+  ]
+}

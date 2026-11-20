@@ -151,19 +151,46 @@ Nunca bloquea una operación en USD.
 
 ## 7. Validación con una DAM real
 
-Cuando tengas una DAM liquidada:
+Herramienta lista: `eval/validar_dam.py` + plantilla `eval/dam_casos.json`.
 
-1. Toma el **valor FOB**, flete y seguro de la factura/DAM.
-2. Envía el código, cantidad y precio al endpoint.
-3. Compara:
-   - `total.cif` contra el valor en aduana de la DAM.
-   - `tributos.ad_valorem`, `igv`, `ipm` y `total` contra la liquidación.
-4. Si hay diferencia, revisa:
-   - tasa `av` del código,
-   - inclusiones/exclusiones del Art. 8,
-   - fecha de cálculo (tasas IGV/IPM),
-   - redondeo.
-5. Agrega el caso a `eval/valoracion_casos.json` con los valores oficiales.
+**Qué copiar de la DAM (DUA):**
+
+| Campo en `dam_casos.json` | De dónde sale |
+|---|---|
+| `codigo` | Subpartida nacional declarada |
+| `cantidad`, `precio_unitario_fob` | Factura comercial |
+| `flete_usd`, `seguro_usd` | Cuadro de liquidación (solo tramo internacional) |
+| `fecha_despacho` | Fecha de numeración de la DAM (define las tasas IGV/IPM) |
+| `oficial_dam.cif_dam` | Casilla 11.15 "Valor en Aduana" |
+| `oficial_dam.av_pct_dam` | Ad valorem declarado, en % |
+| `oficial_dam.ad_valorem_dam` / `igv_dam` / `ipm_dam` | Columnas de la liquidación |
+| `oficial_dam.total_tributos_dam` | Total de tributos (sin percepción) |
+| `oficial_dam.percepcion_dam` | Columna de percepción, si existe (informativa) |
+
+**Cómo ejecutarlo:**
+
+```powershell
+python eval\validar_dam.py
+python eval\validar_dam.py --tolerancia 0.50
+```
+
+Solo evalúa los casos con `"estado": "validado"`. Los `pendiente` se ignoran,
+así que la plantilla puede quedarse en el repo.
+
+Qué revisa:
+
+- `cif`, `ad_valorem`, `igv`, `ipm` y `total` contra la DAM (± 1.00 USD por defecto).
+- Que el `av` del catálogo coincida con el de la DAM. Si no coincide, es señal
+  de clasificación equivocada o de arancel desactualizado, no de redondeo.
+- FOB, flete y seguro de entrada, porque explican casi todas las diferencias.
+
+Si algo falla, el orden de sospecha es:
+
+1. `av` del código (clasificación o vigencia del arancel).
+2. Flete/seguro: ¿incluye tramo interno o solo el internacional?
+3. Art. 8: ¿hay comisiones, regalías, envases o asistencia no declarados?
+4. Fecha: ¿las tasas IGV/IPM corresponden al año del despacho?
+5. Redondeo (lo último; el motor usa `ROUND_HALF_UP` a 2 decimales).
 
 **Ningún caso se considera validado hasta compararlo con una DAM real.**
 
