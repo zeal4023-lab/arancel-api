@@ -43,6 +43,33 @@
         "tipo_cambio_dam": null
       },
       "nota": ""
+    },
+    {
+      "id": "dam-118-2020-10-303250-01-1-00",
+      "estado": "pendiente",
+      "nombre": "Balones de voleibol Mikasa MVA330 PU #5, origen Tailandia",
+      "dam": "118-2020-10-303250-01-1-00",
+      "fecha_despacho": "2020-09-22",
+      "moneda": "USD",
+      "codigo": "9506.62.00.00",
+      "cantidad": 1000,
+      "precio_unitario_fob": 14.15,
+      "flete_usd": 127.92,
+      "seguro_usd": 47.56,
+      "oficial_dam": {
+        "fob_usd": 14150.0,
+        "flete_usd": 127.92,
+        "seguro_usd": 47.56,
+        "cif_dam": 14325.48,
+        "av_pct_dam": 6,
+        "ad_valorem_dam": null,
+        "igv_dam": null,
+        "ipm_dam": null,
+        "total_tributos_dam": null,
+        "percepcion_dam": null,
+        "tipo_cambio_dam": null
+      },
+      "nota": "PENDIENTE. (1) Escala: la DAM escribe '14 150.000' con 3 decimales = 14,150.00, no 14 150 000. Peso bruto 412.295 kg / 1000 unidades = 0.41 kg por balon, y 131 bultos = ~8 balones por caja. Si el original dijera millones, usar cantidad 1000000, precio 14.15, flete 127922, seguro 47556. (2) Falta la pagina de liquidacion (ad valorem, IGV, IPM). (3) El bloque 6 de la DAM no reconcilia con el bloque 7: 74 842.060 vs 14 325.478. Verificar en el original."
     }
   ]
 }
