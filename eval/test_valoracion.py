@@ -51,6 +51,9 @@ class _Servicio:
             normalize_code("8471.60.20.00"): _Nodo(
                 "8471.60.20.00", "Teclados, dispositivos por coordenadas x-y", "0"
             ),
+            normalize_code("8517.13.00.00"): _Nodo(
+                "8517.13.00.00", "Teléfonos inteligentes", "0"
+            ),
         }
 
     def get_code(self, codigo: str):

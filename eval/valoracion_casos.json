@@ -94,6 +94,28 @@
       }
     },
     {
+      "nombre": "CIF con ad valorem 0% (cruce con implementacion externa)",
+      "request": {
+        "api_version": "1.0",
+        "codigo": "8517.13.00.00",
+        "cantidad": 200,
+        "precio_unitario": 25,
+        "moneda": "USD",
+        "condicion": "CIF",
+        "ajustes": {},
+        "fecha_calculo": "2026-11-20"
+      },
+      "esperado": {
+        "total.cif": 5000.0,
+        "tributos.av_pct": 0.0,
+        "tributos.ad_valorem": 0.0,
+        "tributos.base_igv": 5000.0,
+        "tributos.igv": 775.0,
+        "tributos.ipm": 125.0,
+        "tributos.total": 900.0
+      }
+    },
+    {
       "nombre": "Tasas 2027: IGV 15% e IPM 3%",
       "request": {
         "api_version": "1.0",

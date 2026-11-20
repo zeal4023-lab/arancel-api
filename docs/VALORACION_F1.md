@@ -208,10 +208,34 @@ Si algo falla, el orden de sospecha es:
 ## 9. Pruebas
 
 ```powershell
-python eval\test_valoracion.py       # 14 pruebas
+python eval\test_valoracion.py       # 15 pruebas
 python eval\smoke_test.py
 python eval\test_equivalencias.py
 python eval\test_segunda_busqueda.py
 python eval\test_llm_compat.py
 python eval\evaluate_retrieval.py    # 12/12
 ```
+
+---
+
+## 10. Pendiente para F1.1
+
+Ideas evaluadas y aceptadas, todavía **sin implementar**:
+
+| Mejora | Por qué | Riesgo |
+|---|---|---|
+| `items[]` multilínea con prorrateo por valor | Una DAM real casi siempre trae varias series | Cambia el contrato: hacerlo aditivo (mantener el modo de una línea) |
+| Incoterms completos (FCA, FAS, CFR, CPT, CIP, DAP, DPU, DDP) | Saber qué falta según el incoterm evita CIF subvaluados | Ampliar el `Literal` es compatible |
+| Deducciones del Art. 8.2 | Los costos posteriores a la llegada son deducibles (DAP/DPU/DDP) | Debe validarse con SUNAT |
+| Resumen en PEN | La APK puede mostrar tributos en soles | Solo presentación |
+| ISC, antidumping, salvaguardias, percepción | Hoy se excluyen y se avisan | F4; requiere validación legal |
+
+**Rechazado explícitamente:**
+
+- `ad_valorem_pct` enviado por el cliente. El `av` se lee del catálogo, sin
+  excepción. Permitir override abre un hueco de subdeclaración y rompe la
+  trazabilidad.
+- Estimar el seguro (p. ej. 1 % del valor) para "cuadrar" el CIF. Se avisa que
+  falta y se calcula sin él.
+- Tasas IGV/IPM fijas 16 %/2 %. Obsoletas desde el 01/01/2026 (Ley 32387).
+
