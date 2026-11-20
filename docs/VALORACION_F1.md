@@ -194,6 +194,33 @@ Si algo falla, el orden de sospecha es:
 
 **Ningún caso se considera validado hasta compararlo con una DAM real.**
 
+### Resultado: F1 validada con DAM real
+
+**DAM 118-2024-10-458884-01-0-00** (Marítima del Callao, 28/12/2024),
+botellas de vidrio 30 ml con gotero, origen China, partida 7010.90.30.00.
+
+| Concepto | Motor | DAM | Δ |
+|---|---|---|---|
+| FOB | 3 765.00 | 3 765.00 | 0.00 |
+| Flete | 260.00 | 260.00 | 0.00 |
+| Seguro | 37.65 | 37.65 | 0.00 |
+| **Valor en aduana** | **4 062.65** | **4 062.65** | **0.00** |
+| Ad valorem | 0.00 | 0.00 | 0.00 |
+| IGV | 650.02 | 650.02 | 0.00 |
+| IPM | 81.25 | 81.25 | 0.00 |
+| **Total tributos** | **731.27** | **731.27** | **0.00** |
+| Percepción IGV 3.5 % | 167.79 | 167.79 | 0.00 |
+
+Nueve cifras, cero diferencia. El motor también eligió solo las tasas
+**16 % / 2 %** por la fecha de 2024.
+
+**Hallazgo:** el catálogo dice `av = 6 %` (tasa general/MFN) pero la aduana
+aplicó **0 %** por el acuerdo comercial **Perú–China**. Es decir, el ad valorem
+real depende del origen y del acuerdo vigente, no solo del código. Ver F1.1.
+
+**Percepción confirmada:** `3.5 % × (CIF + IGV + IPM)`. Queda documentada para F4,
+aunque la F1 no la calcula.
+
 ---
 
 ## 8. Rollback
@@ -224,6 +251,7 @@ Ideas evaluadas y aceptadas, todavía **sin implementar**:
 
 | Mejora | Por qué | Riesgo |
 |---|---|---|
+| **Origen + acuerdo comercial** | El `av` del catálogo es la tasa general. Con TLC (China, EE. UU., UE…) el derecho real puede ser 0 %. La DAM 2024 lo demostró: catálogo 6 %, aduana 0 % | Alto impacto. Mínimo: pedir origen y **avisar** que puede aplicar preferencia; no inventar la tasa |
 | `items[]` multilínea con prorrateo por valor | Una DAM real casi siempre trae varias series | Cambia el contrato: hacerlo aditivo (mantener el modo de una línea) |
 | Incoterms completos (FCA, FAS, CFR, CPT, CIP, DAP, DPU, DDP) | Saber qué falta según el incoterm evita CIF subvaluados | Ampliar el `Literal` es compatible |
 | Deducciones del Art. 8.2 | Los costos posteriores a la llegada son deducibles (DAP/DPU/DDP) | Debe validarse con SUNAT |

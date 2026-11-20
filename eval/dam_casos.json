@@ -45,6 +45,35 @@
       "nota": ""
     },
     {
+      "id": "dam-118-2024-10-458884-01-0-00",
+      "estado": "validado",
+      "nombre": "Botellas de vidrio 30 ml con gotero, origen China",
+      "dam": "118-2024-10-458884-01-0-00",
+      "fecha_despacho": "2024-12-28",
+      "moneda": "USD",
+      "codigo": "7010.90.30.00",
+      "cantidad": 30000,
+      "precio_unitario_fob": 0.1255,
+      "flete_usd": 260.0,
+      "seguro_usd": 37.65,
+      "av_pct_forzar": 0,
+      "oficial_dam": {
+        "fob_usd": 3765.0,
+        "flete_usd": 260.0,
+        "seguro_usd": 37.65,
+        "cif_dam": 4062.65,
+        "av_pct_dam": 0,
+        "ad_valorem_dam": 0.0,
+        "igv_dam": 650.02,
+        "ipm_dam": 81.25,
+        "total_tributos_dam": 731.27,
+        "percepcion_dam": 167.79,
+        "percepcion_pct_dam": 3.5,
+        "tipo_cambio_dam": 3.71
+      },
+      "nota": "VALIDADA al centavo: CIF, ad valorem, IGV, IPM, total y percepcion. El catalogo dice av 6 % (tasa general/MFN) pero la aduana aplico 0 % por el acuerdo comercial Peru-China; por eso av_pct_forzar=0 y solo se valida el resto del calculo. Confirma: tasas 16 %/2 % vigentes en 2024, y percepcion IGV = 3.5 % de (CIF + IGV + IPM)."
+    },
+    {
       "id": "dam-118-2020-10-303250-01-1-00",
       "estado": "pendiente",
       "nombre": "Balones de voleibol Mikasa MVA330 PU #5, origen Tailandia",

@@ -20,8 +20,9 @@ import argparse
 import json
 import sys
 from datetime import date
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
+from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "backend"))
@@ -62,10 +63,23 @@ def validar_caso(caso: dict, catalogo: dict, tolerancia: float) -> tuple[bool, l
     nodo = catalogo.get(codigo)
     if nodo is None:
         return False, [f"el codigo {codigo} no existe en el catalogo"]
+    av_catalogo = float(nodo.av or 0)
 
     oficial = caso.get("oficial_dam") or {}
     moneda = caso.get("moneda", "USD")
     fecha = _fecha(caso.get("fecha_despacho"))
+
+    # El ad valorem del catalogo es el general (MFN). Con un acuerdo comercial
+    # vigente el derecho real puede ser menor. `av_pct_forzar` permite validar
+    # el resto del calculo con la tasa que efectivamente aplico la aduana.
+    av_forzado = caso.get("av_pct_forzar")
+    if av_forzado is not None:
+        nodo = SimpleNamespace(
+            codigo=nodo.codigo,
+            descripcion=nodo.descripcion,
+            av=str(av_forzado),
+            is_leaf=True,
+        )
 
     fx = None
     if moneda == "PEN":
@@ -92,7 +106,7 @@ def validar_caso(caso: dict, catalogo: dict, tolerancia: float) -> tuple[bool, l
     except Exception as exc:  # noqa: BLE001
         return False, [f"el motor fallo: {exc}"]
 
-    print(f"\n  Codigo {codigo} | av catalogo = {res['tributos']['av_pct']}% "
+    print(f"\n  Codigo {codigo} | av catalogo = {av_catalogo}% "
           f"| fecha = {fecha.isoformat()}")
     print(f"  Tasas aplicadas: IGV {res['tributos']['tasa_igv']:.4f} "
           f"/ IPM {res['tributos']['tasa_ipm']:.4f} "
@@ -100,11 +114,16 @@ def validar_caso(caso: dict, catalogo: dict, tolerancia: float) -> tuple[bool, l
 
     # El ad valorem oficial puede traer una tasa distinta: se avisa, no se oculta.
     av_dam = oficial.get("av_pct_dam")
-    if av_dam is not None and abs(float(av_dam) - res["tributos"]["av_pct"]) > 0.001:
-        fallos.append(
-            f"ad valorem del catalogo ({res['tributos']['av_pct']}%) no coincide con "
-            f"la DAM ({av_dam}%): revisar clasificacion o vigencia del arancel"
-        )
+    if av_dam is not None:
+        if av_forzado is not None:
+            print(f"    info ad valorem: catalogo {av_catalogo}% (general) -> "
+                  f"DAM {av_dam}% (forzado para validar). Revisar acuerdo preferencial.")
+        elif abs(float(av_dam) - av_catalogo) > 0.001:
+            fallos.append(
+                f"ad valorem del catalogo ({av_catalogo}%) no coincide con "
+                f"la DAM ({av_dam}%): revisar clasificacion, acuerdo comercial "
+                f"o vigencia del arancel"
+            )
 
     ok = True
     for campo_motor, campo_dam in CAMPOS:
@@ -131,9 +150,26 @@ def validar_caso(caso: dict, catalogo: dict, tolerancia: float) -> tuple[bool, l
             ok = False
             fallos.append("total de tributos fuera de tolerancia")
 
-    if oficial.get("percepcion_dam"):
-        print(f"    info percepcion DAM = {float(oficial['percepcion_dam']):,.2f} "
-              f"(la F1 no la calcula; queda fuera del total)")
+    # Percepcion del IGV: no forma parte de la F1, pero la formula se comprueba
+    # aqui para dejarla lista para F4. Base = CIF + IGV + IPM.
+    if oficial.get("percepcion_dam") is not None:
+        pct = oficial.get("percepcion_pct_dam")
+        if pct is None:
+            print(f"    info percepcion DAM = {float(oficial['percepcion_dam']):,.2f} "
+                  f"(la F1 no la calcula; queda fuera del total)")
+        else:
+            base_perc = (
+                Decimal(str(res["total"]["cif"]))
+                + Decimal(str(res["tributos"]["igv"]))
+                + Decimal(str(res["tributos"]["ipm"]))
+            )
+            perc = (base_perc * Decimal(str(pct)) / 100).quantize(
+                Decimal("0.01"), rounding=ROUND_HALF_UP
+            )
+            if not _comparar(f"percepcion {pct}%", float(perc),
+                             float(oficial["percepcion_dam"]), tolerancia):
+                # Referencial: la F1 no cobra percepcion, no invalida el caso.
+                print("         (referencial: la F1 no incluye percepcion)")
 
     return ok, fallos
 
