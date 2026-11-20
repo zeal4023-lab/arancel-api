@@ -161,7 +161,7 @@ def calcular(
     # --- 6. Respuesta ------------------------------------------------------
     return {
         "ok": True,
-        "api_version": "1.0",
+        "api_version": "1.1",
         "codigo": nodo.codigo,
         "descripcion": nodo.descripcion,
         "descripcion_usuario": descripcion,

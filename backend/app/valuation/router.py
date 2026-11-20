@@ -15,8 +15,9 @@ from fastapi.responses import JSONResponse
 
 from ..config import settings
 from .calculator import calcular
+from .deductive import calcular_deductivo
 from .fx import FxUnavailable, get_usd_pen
-from .schemas import ValuationRequest
+from .schemas import DeductiveRequest, ValuationRequest
 
 log = logging.getLogger(__name__)
 
@@ -49,8 +50,8 @@ METODOS = [
     {
         "numero": 4,
         "nombre": "Valor deductivo",
-        "implementado": False,
-        "requiere": ["precio de venta local a no vinculados"],
+        "implementado": True,
+        "requiere": ["precio de venta en Perú", "margen y gastos internos"],
         "grado": "aproximado",
     },
     {
@@ -162,3 +163,80 @@ def calcular_valoracion(body: ValuationRequest, request: Request):
             "ERROR_INTERNO",
             "La valoración falló; el resto de la API sigue disponible.",
         )
+
+
+@router.post("/deductive")
+def valoracion_deductiva(body: DeductiveRequest, request: Request):
+    """
+    Método 4: valor deductivo a partir del precio de venta en Perú.
+
+    Devuelve el valor en aduana implícito y, si se envía un precio declarado,
+    lo compara para avisar si está muy por debajo (riesgo de observación).
+    """
+    if not settings.valuation_enabled:
+        return _error(
+            503,
+            "VALUATION_DISABLED",
+            "La valoración está desactivada (VALUATION_ENABLED=false).",
+        )
+
+    if str(body.api_version).split(".")[0] != "1":
+        return _error(
+            409,
+            "API_VERSION_NO_SOPORTADA",
+            f"api_version {body.api_version!r} no soportada; usa 1.x.",
+        )
+
+    try:
+        servicio = request.app.state.service
+        nodo = servicio.get_code(body.codigo)
+        if nodo is None:
+            return _error(
+                404,
+                "CODIGO_NO_ENCONTRADO",
+                f"El código {body.codigo!r} no existe en el catálogo.",
+            )
+        if not getattr(nodo, "is_leaf", False):
+            return _error(
+                400,
+                "CODIGO_NO_CLASIFICABLE",
+                "Se requiere una línea nacional de 10 dígitos (hoja).",
+            )
+
+        fx = None
+        if body.moneda == "PEN":
+            try:
+                fx = get_usd_pen(
+                    body.tipo_cambio,
+                    timeout=settings.valuation_fx_timeout_s,
+                    ttl_h=settings.valuation_fx_cache_h,
+                )
+            except FxUnavailable as exc:
+                return _error(503, "FX_NO_DISPONIBLE", str(exc))
+
+        return calcular_deductivo(
+            nodo=nodo,
+            cantidad=body.cantidad,
+            precio_venta_unitario=body.precio_venta_unitario,
+            moneda=body.moneda,
+            incluye_igv=body.incluye_igv,
+            margen_pct=body.margen_pct,
+            gastos_internos=body.gastos_internos,
+            igv_acreditable=body.igv_acreditable,
+            fx=fx,
+            fecha=body.fecha_calculo or _hoy_lima(),
+            descripcion=body.descripcion,
+            origen=body.origen,
+            precio_declarado_unitario=body.precio_declarado_unitario,
+        )
+
+    except ValueError as exc:
+        return _error(422, "ENTRADA_INVALIDA", str(exc))
+    except Exception as exc:  # nunca debe tumbar la API
+        log.exception("Fallo inesperado en valor deductivo: %s", exc)
+        return _error(
+            500,
+            "ERROR_INTERNO",
+            "El valor deductivo falló; el resto de la API sigue disponible.",
+        )
+

@@ -70,7 +70,7 @@ class Settings:
     # --- Valoración aduanera (F1) -------------------------------------------
     # Apagada por defecto: el código se despliega sin exponer el endpoint.
     valuation_enabled: bool = os.getenv("VALUATION_ENABLED", "false").lower() == "true"
-    valuation_api_version: str = os.getenv("VALUATION_API_VERSION", "1.0")
+    valuation_api_version: str = os.getenv("VALUATION_API_VERSION", "1.1")
     # Tipo de cambio: timeout corto y caché en memoria. Nunca bloquea.
     valuation_fx_timeout_s: float = float(os.getenv("VALUATION_FX_TIMEOUT_S", "4"))
     valuation_fx_cache_h: int = _env_int("VALUATION_FX_CACHE_H", 12)

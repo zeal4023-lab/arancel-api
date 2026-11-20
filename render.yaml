@@ -43,4 +43,4 @@ services:
       - key: VALUATION_ENABLED
         value: "false"
       - key: VALUATION_API_VERSION
-        value: "1.0"
+        value: "1.1"

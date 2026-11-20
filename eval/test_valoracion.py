@@ -146,7 +146,7 @@ def test_methods_disponible_apagado(client):
         data = r.json()
         assert data["enabled"] is False
         assert len(data["metodos"]) == 6
-        assert [m["numero"] for m in data["metodos"] if m["implementado"]] == [1]
+        assert [m["numero"] for m in data["metodos"] if m["implementado"]] == [1, 4]
     finally:
         vr.settings = original
 
@@ -271,6 +271,103 @@ def test_acuerdos_conocidos():
     assert acuerdo_de("DE") is not None  # Unión Europea
     assert acuerdo_de("TW") is None
     assert acuerdo_de(None) is None
+
+
+# --- Método 4: valor deductivo --------------------------------------------
+
+DEDUCTIVO = {
+    "api_version": "1.1",
+    "codigo": "6109.10.00.50",
+    "cantidad": 100,
+    "precio_venta_unitario": 59.90,
+    "moneda": "PEN",
+    "incluye_igv": True,
+    "margen_pct": 35,
+    "gastos_internos": 0,
+    "igv_acreditable": True,
+    "tipo_cambio": 3.5,
+    "fecha_calculo": "2026-11-20",
+}
+
+
+def test_deductivo_caso_concreto(client):
+    r = client.post("/v1/valuation/deductive", json=DEDUCTIVO)
+    assert r.status_code == 200, r.text
+    d = r.json()
+    assert d["metodo"]["numero"] == 4
+    assert d["metodo"]["nombre"] == "Valor deductivo"
+    assert d["valor_deducido"]["total_usd"] == pytest.approx(967.88, abs=0.011)
+    assert d["valor_deducido"]["unitario_usd"] == pytest.approx(9.68, abs=0.011)
+    t = d["equivalente"]["tributos"]
+    assert t["ad_valorem"] == pytest.approx(106.47, abs=0.011)
+    assert t["igv"] == pytest.approx(166.52, abs=0.011)
+    assert t["ipm"] == pytest.approx(26.86, abs=0.011)
+    assert t["total"] == pytest.approx(299.85, abs=0.011)
+
+
+def test_deductivo_reconstruye_el_precio_de_venta(client):
+    """Invariante: CIF × TC × (1+av) × (1+margen) × (1+IGV/IPM) = precio venta."""
+    d = client.post("/v1/valuation/deductive", json=DEDUCTIVO).json()
+    cif = d["valor_deducido"]["total_usd"]
+    reconstruido = cif * 3.5 * (1 + 0.11) * (1 + 0.35) * (1 + 0.18)
+    assert reconstruido == pytest.approx(5990.0, abs=0.60)
+
+
+def test_deductivo_compara_con_el_precio_declarado(client):
+    d = client.post(
+        "/v1/valuation/deductive",
+        json={**DEDUCTIVO, "precio_declarado_unitario": 5.0},
+    ).json()
+    c = d["comparacion"]
+    assert c["muy_por_debajo"] is True
+    assert c["muy_por_encima"] is False
+    assert c["ratio_pct"] == pytest.approx(51.66, abs=0.5)
+    assert any("por debajo del valor deductivo" in a for a in d["avisos"])
+
+
+def test_deductivo_sin_credito_fiscal_da_menor_valor(client):
+    con = client.post("/v1/valuation/deductive", json=DEDUCTIVO).json()
+    sin = client.post(
+        "/v1/valuation/deductive",
+        json={**DEDUCTIVO, "igv_acreditable": False},
+    ).json()
+    assert sin["valor_deducido"]["total_usd"] < con["valor_deducido"]["total_usd"]
+    assert any("NO es acreditable" in a for a in sin["avisos"])
+
+
+def test_deductivo_ad_valorem_cero(client):
+    d = client.post(
+        "/v1/valuation/deductive",
+        json={**DEDUCTIVO, "codigo": "8471.60.20.00"},
+    ).json()
+    assert d["equivalente"]["tributos"]["ad_valorem"] == 0.0
+    # Sin ad valorem el valor en aduana implícito sube.
+    assert d["valor_deducido"]["total_usd"] > 1000
+
+
+def test_deductivo_validaciones(client):
+    r = client.post("/v1/valuation/deductive", json={**DEDUCTIVO, "precio_venta_unitario": 0})
+    assert r.status_code == 422
+    r = client.post("/v1/valuation/deductive", json={**DEDUCTIVO, "codigo": "9999.99.99.99"})
+    assert r.status_code == 404
+    assert r.json()["error"]["codigo"] == "CODIGO_NO_ENCONTRADO"
+
+
+def test_deductivo_apagado(client):
+    original = vr.settings
+    try:
+        vr.settings = replace(original, valuation_enabled=False)
+        r = client.post("/v1/valuation/deductive", json=DEDUCTIVO)
+        assert r.status_code == 503
+        assert r.json()["error"]["codigo"] == "VALUATION_DISABLED"
+    finally:
+        vr.settings = original
+
+
+def test_methods_marca_el_metodo_4(client):
+    d = client.get("/v1/valuation/methods").json()
+    impl = [m["numero"] for m in d["metodos"] if m["implementado"]]
+    assert impl == [1, 4]
 
 
 if __name__ == "__main__":

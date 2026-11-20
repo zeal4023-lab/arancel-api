@@ -89,7 +89,12 @@ def healthz() -> dict:
             "disponible": valuation_router is not None,
             "api_version": settings.valuation_api_version,
             "endpoint": "/v1/valuation/calculate",
-            "metodos_implementados": [1],
+            "endpoints": [
+                "/v1/valuation/methods",
+                "/v1/valuation/calculate",
+                "/v1/valuation/deductive",
+            ],
+            "metodos_implementados": [1, 4],
         },
     }
 
