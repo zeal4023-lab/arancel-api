@@ -67,6 +67,14 @@ class Settings:
     confidence_verify: int = _env_int("CONFIDENCE_VERIFY", 60)
     verify_enabled: bool = os.getenv("VERIFY_ENABLED", "true").lower() == "true"
 
+    # --- Valoración aduanera (F1) -------------------------------------------
+    # Apagada por defecto: el código se despliega sin exponer el endpoint.
+    valuation_enabled: bool = os.getenv("VALUATION_ENABLED", "false").lower() == "true"
+    valuation_api_version: str = os.getenv("VALUATION_API_VERSION", "1.0")
+    # Tipo de cambio: timeout corto y caché en memoria. Nunca bloquea.
+    valuation_fx_timeout_s: float = float(os.getenv("VALUATION_FX_TIMEOUT_S", "4"))
+    valuation_fx_cache_h: int = _env_int("VALUATION_FX_CACHE_H", 12)
+
     # Si no hay API key, el backend usa un proveedor simulado (solo para dev).
     allow_mock: bool = os.getenv("ALLOW_MOCK", "true").lower() == "true"
 

@@ -39,3 +39,8 @@ services:
         value: "*"
       - key: ALLOW_MOCK
         value: "false"
+      # Valoración F1: se despliega APAGADA. Encender solo tras validar.
+      - key: VALUATION_ENABLED
+        value: "false"
+      - key: VALUATION_API_VERSION
+        value: "1.0"

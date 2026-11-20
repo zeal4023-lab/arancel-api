@@ -30,6 +30,15 @@ from .service import ClassificationService, ProductContext
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
+# Importación defensiva: un fallo en el módulo de valoración NO debe impedir
+# que arranque el clasificador. Si falla, el endpoint simplemente no existe y
+# /healthz lo declara como no disponible.
+try:  # pragma: no cover - la ruta feliz se prueba en test_valoracion.py
+    from .valuation.router import router as valuation_router
+except Exception as exc:  # noqa: BLE001
+    valuation_router = None
+    log.exception("Módulo de valoración no disponible: %s", exc)
+
 MAX_IMAGE_BYTES = 8 * 1024 * 1024  # 8 MB, suficiente tras redimensionar a 1280px
 
 
@@ -53,6 +62,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Router aditivo: no altera /v1/describe ni /v1/classify.
+if valuation_router is not None:
+    app.include_router(valuation_router)
+
 
 def svc() -> ClassificationService:
     return app.state.service
@@ -69,6 +82,15 @@ def healthz() -> dict:
         "modo_json": settings.llm_json_mode,
         "modo_simulado": isinstance(service.llm, MockLLM),
         "verify_enabled": settings.verify_enabled,
+        # La APK nueva consulta este campo antes de mostrar la sección de valor.
+        "valuation": settings.valuation_enabled and valuation_router is not None,
+        "valuation_info": {
+            "enabled": settings.valuation_enabled,
+            "disponible": valuation_router is not None,
+            "api_version": settings.valuation_api_version,
+            "endpoint": "/v1/valuation/calculate",
+            "metodos_implementados": [1],
+        },
     }
 
 

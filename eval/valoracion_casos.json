@@ -1,0 +1,120 @@
+{
+  "meta": {
+    "version": "1.0",
+    "fecha": "2026-11-20",
+    "nota": "Casos deterministas del método 1. Pendiente validar con una DAM real ya liquidada (CIF y tributos oficiales)."
+  },
+  "casos": [
+    {
+      "nombre": "FOB USD con ad valorem 11% (tasas 2026)",
+      "request": {
+        "api_version": "1.0",
+        "codigo": "6109.10.00.50",
+        "cantidad": 100,
+        "precio_unitario": 10,
+        "moneda": "USD",
+        "condicion": "FOB",
+        "ajustes": { "flete": 100, "seguro": 10 },
+        "fecha_calculo": "2026-11-20"
+      },
+      "esperado": {
+        "total.cif": 1110.0,
+        "total.valor": 1000.0,
+        "unitario.cif": 11.1,
+        "tributos.av_pct": 11.0,
+        "tributos.ad_valorem": 122.1,
+        "tributos.base_igv": 1232.1,
+        "tributos.igv": 190.98,
+        "tributos.ipm": 30.8,
+        "tributos.total": 343.88
+      }
+    },
+    {
+      "nombre": "CIF ignora flete y seguro repetidos",
+      "request": {
+        "api_version": "1.0",
+        "codigo": "6109.10.00.50",
+        "cantidad": 100,
+        "precio_unitario": 10,
+        "moneda": "USD",
+        "condicion": "CIF",
+        "ajustes": { "flete": 100, "seguro": 10 },
+        "fecha_calculo": "2026-11-20"
+      },
+      "esperado": {
+        "total.cif": 1000.0,
+        "tributos.ad_valorem": 110.0,
+        "tributos.base_igv": 1110.0,
+        "tributos.igv": 172.05,
+        "tributos.ipm": 27.75,
+        "tributos.total": 309.8
+      }
+    },
+    {
+      "nombre": "PEN con tipo de cambio manual",
+      "request": {
+        "api_version": "1.0",
+        "codigo": "6109.10.00.50",
+        "cantidad": 100,
+        "precio_unitario": 35,
+        "moneda": "PEN",
+        "condicion": "FOB",
+        "ajustes": { "flete": 350, "seguro": 35 },
+        "tipo_cambio": 3.5,
+        "fecha_calculo": "2026-11-20"
+      },
+      "esperado": {
+        "total.cif": 1110.0,
+        "tributos.ad_valorem": 122.1,
+        "tributos.igv": 190.98,
+        "tributos.ipm": 30.8,
+        "tributos.total": 343.88
+      }
+    },
+    {
+      "nombre": "Ad valorem 0%: solo IGV e IPM",
+      "request": {
+        "api_version": "1.0",
+        "codigo": "8471.60.20.00",
+        "cantidad": 10,
+        "precio_unitario": 100,
+        "moneda": "USD",
+        "condicion": "FOB",
+        "ajustes": { "flete": 50, "seguro": 10 },
+        "fecha_calculo": "2026-11-20"
+      },
+      "esperado": {
+        "total.cif": 1060.0,
+        "tributos.av_pct": 0.0,
+        "tributos.ad_valorem": 0.0,
+        "tributos.base_igv": 1060.0,
+        "tributos.igv": 164.3,
+        "tributos.ipm": 26.5,
+        "tributos.total": 190.8
+      }
+    },
+    {
+      "nombre": "Tasas 2027: IGV 15% e IPM 3%",
+      "request": {
+        "api_version": "1.0",
+        "codigo": "6109.10.00.50",
+        "cantidad": 100,
+        "precio_unitario": 10,
+        "moneda": "USD",
+        "condicion": "FOB",
+        "ajustes": { "flete": 100, "seguro": 10 },
+        "fecha_calculo": "2027-01-15"
+      },
+      "esperado": {
+        "total.cif": 1110.0,
+        "tributos.ad_valorem": 122.1,
+        "tributos.base_igv": 1232.1,
+        "tributos.igv": 184.82,
+        "tributos.ipm": 36.96,
+        "tributos.total": 343.88,
+        "tributos.tasa_igv": 0.15,
+        "tributos.tasa_ipm": 0.03
+      }
+    }
+  ]
+}
