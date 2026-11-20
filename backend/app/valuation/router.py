@@ -149,6 +149,7 @@ def calcular_valoracion(body: ValuationRequest, request: Request):
             fx=fx,
             fecha=body.fecha_calculo or _hoy_lima(),
             descripcion=body.descripcion,
+            origen=body.origen,
         )
         return resultado
 

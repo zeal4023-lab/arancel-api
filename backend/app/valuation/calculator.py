@@ -16,6 +16,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
 
 from ..preprocess import CatalogNode
+from .acuerdos import evaluar_preferencia
 from .fx import FxRate
 from .rates import tasas_vigentes
 
@@ -50,6 +51,7 @@ def calcular(
     fx: FxRate | None,
     fecha: date,
     descripcion: str | None = None,
+    origen: str | None = None,
 ) -> dict[str, Any]:
     """
     Calcula CIF, ad valorem, IGV e IPM para el primer método.
@@ -116,6 +118,14 @@ def calcular(
         avisos.append(
             "Ad valorem 0 % para este código: solo se calculan IGV e IPM."
         )
+
+    # --- 3b. Preferencia arancelaria (informativa, NO altera el cálculo) ---
+    # El av del catálogo es la tasa general. Si el origen tiene un acuerdo
+    # vigente, el derecho real podría ser menor: se avisa y se muestra la
+    # tasa general aplicada. No se inventa ni se aplica ninguna preferencia.
+    preferencia = evaluar_preferencia(origen, float(av_pct))
+    if origen and av_pct > 0:
+        avisos.append(preferencia["nota"])
 
     # --- 4. IGV e IPM sobre (CIF + ad valorem) ----------------------------
     tasa, tasa_exacta = tasas_vigentes(fecha)
@@ -212,6 +222,7 @@ def calcular(
         },
         "supuestos": supuestos,
         "avisos": avisos,
+        "preferencia_arancelaria": preferencia,
         "aviso_legal": AVISO_LEGAL,
         "trazabilidad": {
             "motor": "python-decimal",
@@ -230,5 +241,6 @@ def calcular(
             },
             "moneda_entrada": moneda,
             "factor_usd": float(factor),
+            "origen": preferencia["origen"],
         },
     }

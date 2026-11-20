@@ -43,6 +43,7 @@ Funciona incluso apagado. Devuelve los 6 métodos y cuáles están implementados
   "api_version": "1.0",
   "codigo": "6109.10.00.50",
   "descripcion": "Camisetas de algodón",
+  "origen": "CN",
   "cantidad": 100,
   "precio_unitario": 10,
   "moneda": "USD",
@@ -62,6 +63,8 @@ Funciona incluso apagado. Devuelve los 6 métodos y cuáles están implementados
 
 - `moneda`: `USD` o `PEN`.
 - `condicion`: `FOB` (por defecto), `CIF` o `EXW`.
+- `origen`: opcional (ISO alfa-2 o nombre: `CN`, `China`, `US`). Si se omite,
+  la respuesta es idéntica a la de la versión anterior.
 - `ajustes`: **totales de la operación**, en la misma moneda del precio.
 - `tipo_cambio`: opcional (PEN por USD); si falta, se consulta en línea.
 - `fecha_calculo`: opcional, solo para simular tasas de otra fecha.
@@ -84,10 +87,39 @@ Respuesta (resumida):
     "ipm": 30.8,
     "total": 343.88
   },
+  "preferencia_arancelaria": {
+    "origen": "CN",
+    "acuerdo": "Acuerdo Comercial Perú - China",
+    "puede_aplicar": true,
+    "ad_valorem_general": 11.0,
+    "nota": "Origen CN: existe Acuerdo Comercial Perú - China..."
+  },
   "avisos": [],
   "aviso_legal": "Estimación referencial..."
 }
 ```
+
+### Preferencia arancelaria (importante)
+
+El `av` del catálogo es la **tasa general (MFN)**. Si el país de origen tiene
+un acuerdo comercial vigente con Perú, el derecho real puede ser menor o 0 %.
+
+El módulo **no aplica ni inventa** la tasa preferencial: solo avisa. La respuesta
+incluye `preferencia_arancelaria` con:
+
+| Campo | Significado |
+|---|---|
+| `origen` | Código ISO normalizado (o `null`) |
+| `acuerdo` | Nombre del acuerdo, si se reconoce |
+| `puede_aplicar` | `true` = **verificar**, no "aplica" |
+| `ad_valorem_general` | Tasa que se está cobrando en el cálculo |
+
+Si `puede_aplicar` es `true` y el cálculo usó un `av` mayor que 0, el resultado
+**sobreestima** los tributos. La app debe mostrar ese aviso de forma visible.
+
+La tabla de acuerdos vive en `backend/app/valuation/acuerdos.py` y es
+**referencial**: no determina si una mercancía concreta califica. Eso depende
+del certificado de origen y de la regla de origen específica.
 
 Errores controlados (siempre JSON, nunca excepción):
 
@@ -235,7 +267,7 @@ aunque la F1 no la calcula.
 ## 9. Pruebas
 
 ```powershell
-python eval\test_valoracion.py       # 15 pruebas
+python eval\test_valoracion.py       # 20 pruebas
 python eval\smoke_test.py
 python eval\test_equivalencias.py
 python eval\test_segunda_busqueda.py
@@ -251,7 +283,6 @@ Ideas evaluadas y aceptadas, todavía **sin implementar**:
 
 | Mejora | Por qué | Riesgo |
 |---|---|---|
-| **Origen + acuerdo comercial** | El `av` del catálogo es la tasa general. Con TLC (China, EE. UU., UE…) el derecho real puede ser 0 %. La DAM 2024 lo demostró: catálogo 6 %, aduana 0 % | Alto impacto. Mínimo: pedir origen y **avisar** que puede aplicar preferencia; no inventar la tasa |
 | `items[]` multilínea con prorrateo por valor | Una DAM real casi siempre trae varias series | Cambia el contrato: hacerlo aditivo (mantener el modo de una línea) |
 | Incoterms completos (FCA, FAS, CFR, CPT, CIP, DAP, DPU, DDP) | Saber qué falta según el incoterm evita CIF subvaluados | Ampliar el `Literal` es compatible |
 | Deducciones del Art. 8.2 | Los costos posteriores a la llegada son deducibles (DAP/DPU/DDP) | Debe validarse con SUNAT |
@@ -262,8 +293,31 @@ Ideas evaluadas y aceptadas, todavía **sin implementar**:
 
 - `ad_valorem_pct` enviado por el cliente. El `av` se lee del catálogo, sin
   excepción. Permitir override abre un hueco de subdeclaración y rompe la
-  trazabilidad.
+  trazabilidad. La preferencia arancelaria se **avisa**, no se aplica.
 - Estimar el seguro (p. ej. 1 % del valor) para "cuadrar" el CIF. Se avisa que
   falta y se calcula sin él.
 - Tasas IGV/IPM fijas 16 %/2 %. Obsoletas desde el 01/01/2026 (Ley 32387).
+
+---
+
+## 11. Origen y preferencia arancelaria (implementado)
+
+Nació de la DAM 2024: el catálogo decía 6 % y la aduana cobró 0 % por el
+acuerdo Perú–China. Sin este aviso, la valoración sobreestima derechos en
+cualquier importación con TLC.
+
+Lo que hace:
+
+1. Normaliza `origen` (`CN`, `cn`, `China`, `Estados Unidos` → ISO alfa-2).
+2. Consulta la tabla referencial de acuerdos (`acuerdos.py`).
+3. Si el `av` del catálogo es mayor que 0, agrega un aviso y llena
+   `preferencia_arancelaria`.
+4. **No cambia el cálculo**: `ad_valorem` sigue usando la tasa general.
+
+Lo que no hace (a propósito):
+
+- No aplica la tasa preferencial. No hay tabla de preferencias por subpartida
+  ni por regla de origen, y adivinarla sería peor que no tenerla.
+- No sustituye el certificado de origen ni la determinación de SUNAT.
+
 

@@ -192,5 +192,86 @@ def test_main_monta_el_router_sin_tocar_los_existentes():
     assert "/v1/classify" in rutas
 
 
+# --- Origen y preferencia arancelaria -------------------------------------
+
+def test_normalizar_origen():
+    from app.valuation.acuerdos import normalizar_origen
+
+    assert normalizar_origen("China") == "CN"
+    assert normalizar_origen("  cn ") == "CN"
+    assert normalizar_origen("Estados Unidos") == "US"
+    assert normalizar_origen("Japón") == "JP"
+    assert normalizar_origen("Taiwán") is None
+    assert normalizar_origen(None) is None
+    assert normalizar_origen("") is None
+
+
+def test_origen_con_acuerdo_avisa_sin_cambiar_el_calculo(client):
+    base = {
+        "codigo": "6109.10.00.50",
+        "cantidad": 100,
+        "precio_unitario": 10,
+        "moneda": "USD",
+        "condicion": "FOB",
+        "ajustes": {"flete": 100, "seguro": 10},
+        "fecha_calculo": "2026-11-20",
+    }
+    sin = client.post("/v1/valuation/calculate", json=base).json()
+    con = client.post("/v1/valuation/calculate", json={**base, "origen": "China"}).json()
+
+    # El cálculo no cambia: la preferencia no se aplica sola.
+    assert con["tributos"]["ad_valorem"] == sin["tributos"]["ad_valorem"]
+    assert con["tributos"]["total"] == sin["tributos"]["total"]
+
+    pref = con["preferencia_arancelaria"]
+    assert pref["origen"] == "CN"
+    assert pref["puede_aplicar"] is True
+    assert "China" in pref["acuerdo"]
+    assert pref["ad_valorem_general"] == 11.0
+    assert any("tasa GENERAL" in a for a in con["avisos"])
+    # Sin origen no se agrega el aviso de preferencia.
+    assert not any("tasa GENERAL" in a for a in sin["avisos"])
+
+
+def test_origen_sin_acuerdo_avisa_igual(client):
+    r = client.post("/v1/valuation/calculate", json={
+        "codigo": "6109.10.00.50",
+        "cantidad": 100,
+        "precio_unitario": 10,
+        "origen": "TW",
+        "fecha_calculo": "2026-11-20",
+    })
+    assert r.status_code == 200
+    pref = r.json()["preferencia_arancelaria"]
+    assert pref["origen"] == "TW"
+    assert pref["acuerdo"] is None
+    assert pref["puede_aplicar"] is False
+    assert any("tasa GENERAL" in a for a in r.json()["avisos"])
+
+
+def test_origen_av_cero_no_genera_aviso_de_preferencia(client):
+    r = client.post("/v1/valuation/calculate", json={
+        "codigo": "8471.60.20.00",
+        "cantidad": 10,
+        "precio_unitario": 100,
+        "origen": "CN",
+        "fecha_calculo": "2026-11-20",
+    })
+    assert r.status_code == 200
+    data = r.json()
+    assert data["preferencia_arancelaria"]["puede_aplicar"] is False
+    assert not any("tasa GENERAL" in a for a in data["avisos"])
+
+
+def test_acuerdos_conocidos():
+    from app.valuation.acuerdos import acuerdo_de
+
+    assert acuerdo_de("CN") is not None
+    assert acuerdo_de("US") is not None
+    assert acuerdo_de("DE") is not None  # Unión Europea
+    assert acuerdo_de("TW") is None
+    assert acuerdo_de(None) is None
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))

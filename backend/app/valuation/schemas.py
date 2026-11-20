@@ -30,6 +30,9 @@ class ValuationRequest(BaseModel):
     api_version: str = Field(default="1.0", max_length=16)
     codigo: str = Field(..., min_length=1, max_length=20)
     descripcion: str | None = Field(default=None, max_length=2000)
+    # País de origen (ISO alfa-2 o nombre). Opcional: si se omite, el
+    # comportamiento es idéntico al de la versión anterior.
+    origen: str | None = Field(default=None, max_length=40)
     cantidad: Decimal = Field(default=Decimal("1"), gt=0)
     precio_unitario: Decimal = Field(..., ge=0)
     moneda: Literal["USD", "PEN"] = "USD"

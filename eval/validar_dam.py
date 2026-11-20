@@ -102,6 +102,7 @@ def validar_caso(caso: dict, catalogo: dict, tolerancia: float) -> tuple[bool, l
             fx=fx,
             fecha=fecha,
             descripcion=caso.get("nombre"),
+            origen=caso.get("origen"),
         )
     except Exception as exc:  # noqa: BLE001
         return False, [f"el motor fallo: {exc}"]
