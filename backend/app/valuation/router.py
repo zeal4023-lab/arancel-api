@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 from datetime import date, datetime, timedelta, timezone
+from decimal import Decimal
 
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
@@ -17,7 +18,17 @@ from ..config import settings
 from .calculator import calcular
 from .deductive import calcular_deductivo
 from .fx import FxUnavailable, get_usd_pen
-from .schemas import DeductiveRequest, ValuationRequest
+from .reference import (
+    BraveProvider,
+    NullProvider,
+    ReferenceLimitReached,
+    ReferenceUnavailable,
+    consultar_referencia,
+    estado_cupo,
+    get_provider,
+    set_provider,
+)
+from .schemas import DeductiveRequest, ReferenceRequest, ValuationRequest
 
 log = logging.getLogger(__name__)
 
@@ -239,4 +250,111 @@ def valoracion_deductiva(body: DeductiveRequest, request: Request):
             "ERROR_INTERNO",
             "El valor deductivo falló; el resto de la API sigue disponible.",
         )
+
+
+@router.post("/reference")
+def referencia_precios(body: ReferenceRequest, request: Request):
+    """
+    Precios de referencia desde búsqueda web (Brave) + estimación opcional.
+
+    Es referencial: alimenta el método 4 con un precio de venta plausible.
+    Nunca se presenta como valor en aduana ni como prueba documental.
+    """
+    if not settings.valuation_enabled:
+        return _error(
+            503,
+            "VALUATION_DISABLED",
+            "La valoración está desactivada (VALUATION_ENABLED=false).",
+        )
+    if not settings.reference_search_enabled:
+        return _error(
+            503,
+            "REFERENCE_DISABLED",
+            "La búsqueda de precios está desactivada "
+            "(REFERENCE_SEARCH_ENABLED=false).",
+        )
+    if str(body.api_version).split(".")[0] != "1":
+        return _error(
+            409,
+            "API_VERSION_NO_SOPORTADA",
+            f"api_version {body.api_version!r} no soportada; usa 1.x.",
+        )
+
+    # El proveedor se construye la primera vez que hay clave configurada.
+    if isinstance(get_provider(), NullProvider):
+        if not settings.brave_api_key:
+            return _error(
+                503,
+                "REFERENCE_UNAVAILABLE",
+                "Falta configurar BRAVE_API_KEY en el servidor.",
+            )
+        set_provider(BraveProvider(
+            settings.brave_api_key,
+            timeout=settings.reference_timeout_s,
+        ))
+
+    try:
+        resultado = consultar_referencia(
+            body.consulta,
+            cantidad=settings.reference_count,
+            limite_mensual=settings.reference_monthly_limit,
+        )
+    except ReferenceLimitReached as exc:
+        return _error(429, "REFERENCE_LIMIT_REACHED", str(exc))
+    except ReferenceUnavailable as exc:
+        return _error(503, "REFERENCE_UNAVAILABLE", str(exc))
+    except Exception as exc:  # noqa: BLE001
+        log.exception("Fallo inesperado en precios de referencia: %s", exc)
+        return _error(
+            500,
+            "ERROR_INTERNO",
+            "La búsqueda de precios falló; el resto de la API sigue disponible.",
+        )
+
+    resultado["api_version"] = settings.valuation_api_version
+    resultado["cupo"] = estado_cupo(settings.reference_monthly_limit)
+    resultado["estimacion_aduanera"] = None
+
+    # Estimación con método 4 usando el precio mediano (solo si hay código).
+    rango = resultado.get("rango")
+    if body.codigo and rango and resultado.get("moneda") == "PEN":
+        try:
+            nodo = request.app.state.service.get_code(body.codigo)
+            if nodo is not None and getattr(nodo, "is_leaf", False):
+                fx = get_usd_pen(
+                    body.tipo_cambio,
+                    timeout=settings.valuation_fx_timeout_s,
+                    ttl_h=settings.valuation_fx_cache_h,
+                )
+                est = calcular_deductivo(
+                    nodo=nodo,
+                    cantidad=body.cantidad,
+                    precio_venta_unitario=Decimal(str(rango["mediana"])),
+                    moneda="PEN",
+                    incluye_igv=body.incluye_igv,
+                    margen_pct=body.margen_pct,
+                    gastos_internos=Decimal("0"),
+                    igv_acreditable=True,
+                    fx=fx,
+                    fecha=_hoy_lima(),
+                    origen=body.origen,
+                    precio_declarado_unitario=body.precio_declarado_unitario,
+                )
+                resultado["estimacion_aduanera"] = {
+                    "metodo": 4,
+                    "precio_venta_usado": rango["mediana"],
+                    "valor_deducido_unitario_usd": est["valor_deducido"]["unitario_usd"],
+                    "valor_deducido_total_usd": est["valor_deducido"]["total_usd"],
+                    "tributos": est["equivalente"]["tributos"],
+                    "avisos": est["avisos"],
+                }
+        except (FxUnavailable, ValueError) as exc:
+            resultado["aviso_estimacion"] = f"No se pudo estimar el valor: {exc}"
+        except Exception as exc:  # noqa: BLE001
+            # La referencia sigue siendo útil aunque falle la estimación.
+            log.warning("Fallo la estimación desde referencia: %s", exc)
+            resultado["aviso_estimacion"] = "No se pudo estimar el valor en aduana."
+
+    return resultado
+
 

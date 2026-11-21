@@ -159,9 +159,83 @@ flag apagado y catálogo de métodos.
 
 | Paso | Qué | Bloqueo |
 |---|---|---|
-| 2.1 | Sugerir el precio de venta desde la web (Brave) | Falta `BRAVE_API_KEY` |
+| 2.1 | Sugerir el precio de venta desde la web (Brave) | ✅ implementado, falta la clave |
 | 2.2 | Métodos 2/3 con comparables | Falta base de datos de Aduanas |
 | 2.3 | UI en la APK para el método 4 | Requiere build |
 
 La búsqueda web alimentaría el **precio de venta** del método 4, no un valor de
 aduana directo: un precio de retail no es prueba aduanera.
+
+---
+
+## 9. Precios de referencia desde búsqueda web (implementado)
+
+`POST /v1/valuation/reference`
+
+Busca el producto en la web, extrae precios y devuelve un rango. Si se envía
+el código, además estima el valor en aduana con el método 4.
+
+### Activación (dos flags)
+
+```
+VALUATION_ENABLED       = true
+REFERENCE_SEARCH_ENABLED = true
+BRAVE_API_KEY           = <secreto, solo en el panel>
+REFERENCE_MONTHLY_LIMIT = 990
+```
+
+### Qué devuelve
+
+```json
+{
+  "referencial": true,
+  "consulta": "termo electrico 1.5l",
+  "rango": { "min": 79.90, "mediana": 82.50, "max": 85.00, "muestras": 3 },
+  "moneda": "PEN",
+  "fuentes": ["mercadolibre.com.pe", "falabella.com.pe"],
+  "cupo": { "usadas": 1, "limite": 990, "restantes": 989 },
+  "estimacion_aduanera": {
+    "metodo": 4,
+    "valor_deducido_unitario_usd": 7.42,
+    "tributos": { "...": "..." }
+  }
+}
+```
+
+### Reglas de cumplimiento (términos de Brave)
+
+| Cláusula | Cómo se cumple |
+|---|---|
+| 3(b)(i) no almacenar resultados | Solo memoria transitoria de **120 s** para evitar el doble toque. Nada en disco ni en base de datos |
+| 3(b)(xi) no redistribuir | Se devuelve el **dominio** de origen, nunca la lista de resultados |
+| 3(b)(xiii) no entrenar modelos | La extracción es con expresiones regulares; no hay LLM ni dataset |
+| 4(d) atribución | Voluntaria; no se usan marcas de Brave |
+
+### Coste y límites
+
+- $5/1 000 consultas; $5 de crédito gratuito al mes (≈1 000 consultas).
+- Tope propio en **990** (`REFERENCE_MONTHLY_LIMIT`), por debajo del crédito.
+- En el panel de Brave: prepago **$0**, recarga automática **apagada** y
+  **límite de uso mensual en $4.99**. Así el coste máximo es $0.
+- El contador vive en memoria: se reinicia al redesplegar. La garantía real de
+  no pagar es el prepago en $0.
+
+### Si Brave falla
+
+| Situación | Respuesta |
+|---|---|
+| Flag apagado | `503 REFERENCE_DISABLED` |
+| Sin `BRAVE_API_KEY` | `503 REFERENCE_UNAVAILABLE` |
+| Cupo agotado | `429 REFERENCE_LIMIT_REACHED` |
+| Error de red / clave inválida | `503 REFERENCE_UNAVAILABLE` |
+| Sin precios utilizables | `200` con `rango: null` y un aviso |
+
+En todos los casos la clasificación y los métodos 1 y 4 siguen funcionando.
+
+### Pruebas
+
+`eval/test_valoracion.py` cubre: extracción de formatos (`S/ 59,90`,
+`S/. 1.299,00`, `$ 12.99`), descarte de valores atípicos, mínimo de muestras,
+rango real, caché transitoria, límite mensual, flag apagado, falta de clave y
+estimación con método 4. Total: **37 pruebas**.
+

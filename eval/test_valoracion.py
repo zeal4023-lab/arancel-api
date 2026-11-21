@@ -370,5 +370,222 @@ def test_methods_marca_el_metodo_4(client):
     assert impl == [1, 4]
 
 
+# --- Precios de referencia desde búsqueda web -----------------------------
+
+class _ProveedorFalso:
+    def __init__(self, resultados):
+        self._resultados = resultados
+        self.llamadas = 0
+
+    def buscar(self, consulta, cantidad):
+        self.llamadas += 1
+        return self._resultados
+
+
+def _resultados(*textos):
+    from app.valuation.reference import ResultadoBusqueda
+
+    return [
+        ResultadoBusqueda(titulo=t, descripcion="", url="https://tienda.pe/x")
+        for t in textos
+    ]
+
+
+def test_extraer_precios_formatos():
+    from app.valuation.reference import extraer_precios, ResultadoBusqueda
+
+    res = [ResultadoBusqueda(
+        titulo="Termo S/ 59,90 · otro S/. 1.299,00 · oferta S/ 89.90",
+        descripcion="desde PEN 45,50 y US$ 12.99",
+        url="https://x.pe",
+    )]
+    soles, dolares = extraer_precios(res)
+    assert 59.90 in soles or any(abs(float(s) - 59.9) < 0.01 for s in soles)
+    assert any(abs(float(s) - 1299.0) < 0.01 for s in soles)
+    assert any(abs(float(s) - 89.90) < 0.01 for s in soles)
+    assert any(abs(float(d) - 12.99) < 0.01 for d in dolares)
+
+
+def test_resumir_descarta_valores_atipicos():
+    from decimal import Decimal as D
+    from app.valuation.reference import resumir
+
+    # Un accesorio de S/ 5 entre termos de ~S/ 80 no debe arrastrar la mediana.
+    r = resumir([D("75"), D("80"), D("85"), D("90"), D("5")])
+    assert r is not None
+    assert r["muestras"] == 4
+    assert r["descartados"] == 1
+    assert 75 <= r["mediana"] <= 90
+
+
+def test_resumir_exige_muestras():
+    from decimal import Decimal as D
+    from app.valuation.reference import resumir
+
+    assert resumir([D("80")]) is None
+    assert resumir([]) is None
+
+
+def _habilitar_referencia(monkeypatch=None):
+    from dataclasses import replace as _replace
+    import app.valuation.router as _vr
+
+    return _replace(
+        _vr.settings,
+        valuation_enabled=True,
+        reference_search_enabled=True,
+        brave_api_key="clave-de-prueba",
+        reference_monthly_limit=990,
+    )
+
+
+def test_reference_devuelve_rango(client):
+    import app.valuation.reference as ref
+    import app.valuation.router as vr
+    from dataclasses import replace
+
+    original = vr.settings
+    ref.reiniciar_cupo()
+    ref.limpiar_transitorio()
+    proveedor = _ProveedorFalso(_resultados(
+        "Termo electrico 1.5L S/ 79,90",
+        "Termo electrico acero S/ 85,00",
+        "Termo electrico S/ 82.50 envio gratis",
+        "Repuesto tapa S/ 12,00",
+    ))
+    try:
+        ref.set_provider(proveedor)
+        vr.settings = replace(original, valuation_enabled=True,
+                              reference_search_enabled=True,
+                              brave_api_key="x", reference_monthly_limit=990)
+        r = client.post("/v1/valuation/reference", json={"consulta": "termo electrico 1.5l"})
+        assert r.status_code == 200, r.text
+        d = r.json()
+        assert d["referencial"] is True
+        assert d["moneda"] == "PEN"
+        assert d["rango"]["muestras"] >= 2
+        assert 70 <= d["rango"]["mediana"] <= 90
+        assert d["cupo"]["usadas"] == 1
+        assert proveedor.llamadas == 1
+    finally:
+        vr.settings = original
+        ref.set_provider(ref.NullProvider())
+        ref.reiniciar_cupo()
+
+
+def test_reference_usa_transitorio_para_evitar_doble_cobro(client):
+    import app.valuation.reference as ref
+    import app.valuation.router as vr
+    from dataclasses import replace
+
+    original = vr.settings
+    ref.reiniciar_cupo()
+    ref.limpiar_transitorio()
+    proveedor = _ProveedorFalso(_resultados("Termo S/ 79,90", "Termo S/ 85,00"))
+    try:
+        ref.set_provider(proveedor)
+        vr.settings = replace(original, valuation_enabled=True,
+                              reference_search_enabled=True, brave_api_key="x")
+        body = {"consulta": "termo electrico 1.5l"}
+        client.post("/v1/valuation/reference", json=body)
+        client.post("/v1/valuation/reference", json=body)
+        assert proveedor.llamadas == 1  # solo una llamada real en 120 s
+    finally:
+        vr.settings = original
+        ref.set_provider(ref.NullProvider())
+        ref.reiniciar_cupo()
+        ref.limpiar_transitorio()
+
+
+def test_reference_apagada_503(client):
+    import app.valuation.router as vr
+    from dataclasses import replace
+
+    original = vr.settings
+    try:
+        vr.settings = replace(original, valuation_enabled=True,
+                              reference_search_enabled=False)
+        r = client.post("/v1/valuation/reference", json={"consulta": "termo electrico"})
+        assert r.status_code == 503
+        assert r.json()["error"]["codigo"] == "REFERENCE_DISABLED"
+    finally:
+        vr.settings = original
+
+
+def test_reference_sin_clave_503(client):
+    import app.valuation.reference as ref
+    import app.valuation.router as vr
+    from dataclasses import replace
+
+    original = vr.settings
+    try:
+        ref.set_provider(ref.NullProvider())
+        vr.settings = replace(original, valuation_enabled=True,
+                              reference_search_enabled=True, brave_api_key="")
+        r = client.post("/v1/valuation/reference", json={"consulta": "termo electrico"})
+        assert r.status_code == 503
+        assert r.json()["error"]["codigo"] == "REFERENCE_UNAVAILABLE"
+    finally:
+        vr.settings = original
+
+
+def test_reference_limite_mensual(client):
+    import app.valuation.reference as ref
+    import app.valuation.router as vr
+    from dataclasses import replace
+
+    original = vr.settings
+    ref.reiniciar_cupo()
+    ref.limpiar_transitorio()
+    proveedor = _ProveedorFalso(_resultados("Termo S/ 79,90", "Termo S/ 85,00"))
+    try:
+        ref.set_provider(proveedor)
+        vr.settings = replace(original, valuation_enabled=True,
+                              reference_search_enabled=True, brave_api_key="x",
+                              reference_monthly_limit=1)
+        r1 = client.post("/v1/valuation/reference", json={"consulta": "termo a"})
+        assert r1.status_code == 200
+        r2 = client.post("/v1/valuation/reference", json={"consulta": "termo b"})
+        assert r2.status_code == 429
+        assert r2.json()["error"]["codigo"] == "REFERENCE_LIMIT_REACHED"
+    finally:
+        vr.settings = original
+        ref.set_provider(ref.NullProvider())
+        ref.reiniciar_cupo()
+        ref.limpiar_transitorio()
+
+
+def test_reference_estima_valor_en_aduana(client):
+    import app.valuation.reference as ref
+    import app.valuation.router as vr
+    from dataclasses import replace
+
+    original = vr.settings
+    ref.reiniciar_cupo()
+    ref.limpiar_transitorio()
+    proveedor = _ProveedorFalso(_resultados(
+        "Camiseta algodon S/ 59,90", "Camiseta algodon S/ 62,00"))
+    try:
+        ref.set_provider(proveedor)
+        vr.settings = replace(original, valuation_enabled=True,
+                              reference_search_enabled=True, brave_api_key="x")
+        r = client.post("/v1/valuation/reference", json={
+            "consulta": "camiseta algodon",
+            "codigo": "6109.10.00.50",
+            "tipo_cambio": 3.5,
+            "cantidad": 100,
+        })
+        assert r.status_code == 200, r.text
+        est = r.json()["estimacion_aduanera"]
+        assert est is not None
+        assert est["metodo"] == 4
+        assert est["valor_deducido_unitario_usd"] > 0
+    finally:
+        vr.settings = original
+        ref.set_provider(ref.NullProvider())
+        ref.reiniciar_cupo()
+        ref.limpiar_transitorio()
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))

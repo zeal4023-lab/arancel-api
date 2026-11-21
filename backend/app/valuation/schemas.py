@@ -77,3 +77,24 @@ class DeductiveRequest(BaseModel):
     tipo_cambio: Decimal | None = Field(default=None, gt=0)
     fecha_calculo: date | None = None
 
+
+class ReferenceRequest(BaseModel):
+    """
+    Precios de referencia desde búsqueda web.
+
+    El resultado es referencial: sirve para estimar el precio de venta en
+    Perú y alimentar el método 4. Nunca es valor en aduana.
+    """
+
+    api_version: str = Field(default="1.1", max_length=16)
+    consulta: str = Field(..., min_length=3, max_length=160)
+    # Si se envía el código, además del rango se devuelve la estimación
+    # del valor en aduana con el método 4.
+    codigo: str | None = Field(default=None, max_length=20)
+    origen: str | None = Field(default=None, max_length=40)
+    cantidad: Decimal = Field(default=Decimal("1"), gt=0)
+    margen_pct: Decimal = Field(default=Decimal("35"), ge=0, le=95)
+    incluye_igv: bool = True
+    precio_declarado_unitario: Decimal | None = Field(default=None, gt=0)
+    tipo_cambio: Decimal | None = Field(default=None, gt=0)
+

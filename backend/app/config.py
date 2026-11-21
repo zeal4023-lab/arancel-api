@@ -75,6 +75,18 @@ class Settings:
     valuation_fx_timeout_s: float = float(os.getenv("VALUATION_FX_TIMEOUT_S", "4"))
     valuation_fx_cache_h: int = _env_int("VALUATION_FX_CACHE_H", 12)
 
+    # --- Búsqueda de precios de referencia (F2) -----------------------------
+    # Apagada por defecto y con su propio flag: si Brave falla o desaparece,
+    # la valoración (métodos 1 y 4) sigue intacta.
+    reference_search_enabled: bool = (
+        os.getenv("REFERENCE_SEARCH_ENABLED", "false").lower() == "true"
+    )
+    brave_api_key: str = os.getenv("BRAVE_API_KEY", "")
+    # Tope propio, por debajo del crédito gratuito de Brave (~1000/mes).
+    reference_monthly_limit: int = _env_int("REFERENCE_MONTHLY_LIMIT", 990)
+    reference_timeout_s: float = float(os.getenv("REFERENCE_TIMEOUT_S", "8"))
+    reference_count: int = _env_int("REFERENCE_COUNT", 10)
+
     # Si no hay API key, el backend usa un proveedor simulado (solo para dev).
     allow_mock: bool = os.getenv("ALLOW_MOCK", "true").lower() == "true"
 

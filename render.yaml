@@ -44,3 +44,9 @@ services:
         value: "false"
       - key: VALUATION_API_VERSION
         value: "1.1"
+      # Búsqueda de precios de referencia (Brave). Flag propio y apagado.
+      # BRAVE_API_KEY NO se escribe aquí: es un secreto y va en el panel.
+      - key: REFERENCE_SEARCH_ENABLED
+        value: "false"
+      - key: REFERENCE_MONTHLY_LIMIT
+        value: "990"

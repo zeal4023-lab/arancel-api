@@ -95,6 +95,12 @@ def healthz() -> dict:
                 "/v1/valuation/deductive",
             ],
             "metodos_implementados": [1, 4],
+            # Búsqueda de precios de referencia: flag propio.
+            "reference_search": {
+                "enabled": settings.reference_search_enabled,
+                "configurada": bool(settings.brave_api_key),
+                "limite_mensual": settings.reference_monthly_limit,
+            },
         },
     }
 
