@@ -78,6 +78,8 @@ def main() -> int:
     ap.add_argument("--url", default="https://arancel-api-q3o9.onrender.com")
     ap.add_argument("--sin-clasificar", action="store_true",
                     help="Omite la prueba de clasificacion (no consume LLM).")
+    ap.add_argument("--referencia", action="store_true",
+                    help="Prueba la busqueda de precios (consume 1 credito de Brave).")
     args = ap.parse_args()
     base = args.url.rstrip("/")
     fallos = 0
@@ -177,9 +179,42 @@ def main() -> int:
             print(f"[4] /v1/classify 200 | {r.get('codigo')} | "
                   f"confianza={c.get('confianza')} | nivel={r.get('nivel')}")
 
+    # 5. Referencia de precios (opcional: consume 1 credito de Brave)
+    ref_info = (h.get("valuation_info") or {}).get("reference_search") or {}
+    if args.referencia:
+        if not ref_info.get("enabled"):
+            print("[5] referencia APAGADA (REFERENCE_SEARCH_ENABLED=false)")
+        elif not ref_info.get("configurada"):
+            print("[5] referencia sin BRAVE_API_KEY")
+            fallos += 1
+        else:
+            estado, ref = call(base, "POST", "/v1/valuation/reference", {
+                "consulta": "termo electrico 1.5 litros",
+                "codigo": "8516.10.00.00",
+                "tipo_cambio": 3.5,
+            }, timeout=180)
+            print(f"[5] /v1/valuation/reference -> {estado}")
+            if estado != 200:
+                print(f"    {json.dumps(ref)[:240]}")
+                fallos += 1
+            else:
+                rango = ref.get("rango")
+                print(f"    rango: {rango}")
+                print(f"    fuentes: {ref.get('fuentes')}")
+                print(f"    cupo: {ref.get('cupo')}")
+                est = ref.get("estimacion_aduanera")
+                if est:
+                    print(f"    estimacion metodo 4: "
+                          f"US$ {est['valor_deducido_unitario_usd']} /unid.")
+                if not rango:
+                    print("    (sin precios utilizables en esta consulta)")
+    else:
+        print(f"[5] referencia: enabled={ref_info.get('enabled')} "
+              f"configurada={ref_info.get('configurada')} "
+              f"(usa --referencia para probarla)")
+
     print("\nRESULTADO:", "TODO OK" if fallos == 0 else f"{fallos} PROBLEMAS")
     return 0 if fallos == 0 else 1
-
 
 if __name__ == "__main__":
     raise SystemExit(main())
