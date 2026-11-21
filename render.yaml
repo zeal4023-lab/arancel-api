@@ -39,14 +39,15 @@ services:
         value: "*"
       - key: ALLOW_MOCK
         value: "false"
-      # Valoración F1: se despliega APAGADA. Encender solo tras validar.
+      # Valoración: ACTIVADA. Refleja el estado real del panel.
+      # Si se apaga, los endpoints responden 503 controlado.
       - key: VALUATION_ENABLED
-        value: "false"
+        value: "true"
       - key: VALUATION_API_VERSION
         value: "1.1"
-      # Búsqueda de precios de referencia (Brave). Flag propio y apagado.
+      # Búsqueda de precios de referencia (Brave). ACTIVADA.
       # BRAVE_API_KEY NO se escribe aquí: es un secreto y va en el panel.
       - key: REFERENCE_SEARCH_ENABLED
-        value: "false"
+        value: "true"
       - key: REFERENCE_MONTHLY_LIMIT
         value: "990"
