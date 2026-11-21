@@ -588,9 +588,10 @@ def test_reference_estima_valor_en_aduana(client):
 
 
 def test_brave_reintenta_sin_localizacion(monkeypatch):
-    """Si Brave rechaza country/search_lang, se reintenta con lo mínimo."""
+    """Si Brave rechaza country/search_lang, baja escalón hasta que funcione."""
     from app.valuation.reference import BraveProvider, _HttpError
 
+    BraveProvider._combo_desde = 0
     prov = BraveProvider("clave")
     llamadas = []
 
@@ -605,9 +606,11 @@ def test_brave_reintenta_sin_localizacion(monkeypatch):
     monkeypatch.setattr(prov, "_get", fake_get)
     res = prov.buscar("termo electrico", 10)
     assert len(res) == 1
-    assert len(llamadas) == 2
-    assert "country" not in llamadas[1]
-    assert llamadas[1]["q"] == "termo electrico"
+    # Dos intentos con country fallan; el tercero (solo search_lang) funciona.
+    assert len(llamadas) == 3
+    assert "country" not in llamadas[-1]
+    assert llamadas[-1]["q"] == "termo electrico"
+    BraveProvider._combo_desde = 0
 
 
 def test_brave_traduce_errores(monkeypatch):
@@ -631,6 +634,140 @@ def test_brave_traduce_errores(monkeypatch):
             raise AssertionError(f"{codigo} debió lanzar")
         except esperado:
             pass
+
+
+def test_reference_ignora_tiendas_de_otros_paises(client):
+    """Un precio de MercadoLibre Chile no debe entrar como si fueran soles."""
+    import app.valuation.reference as ref
+    import app.valuation.router as vr
+    from dataclasses import replace
+    from app.valuation.reference import ResultadoBusqueda
+
+    original = vr.settings
+    ref.reiniciar_cupo()
+    ref.limpiar_transitorio()
+    extranjeros = [
+        ResultadoBusqueda("Termo $45.000", "", "https://listado.mercadolibre.cl/x"),
+        ResultadoBusqueda("Termo $67.500", "", "https://www.idealo.es/y"),
+        ResultadoBusqueda("Termo S/ 79,90", "", "https://www.falabella.com.pe/z"),
+        ResultadoBusqueda("Termo S/ 85,00", "", "https://www.ripley.com.pe/w"),
+    ]
+    proveedor = _ProveedorFalso(extranjeros)
+    try:
+        ref.set_provider(proveedor)
+        vr.settings = replace(original, valuation_enabled=True,
+                              reference_search_enabled=True, brave_api_key="x")
+        r = client.post("/v1/valuation/reference", json={"consulta": "termo electrico"})
+        assert r.status_code == 200, r.text
+        d = r.json()
+        assert d["resultados_ignorados"] == 2
+        assert d["fuentes"] == ["www.falabella.com.pe", "www.ripley.com.pe"]
+        assert d["rango"] is not None
+        assert d["rango"]["muestras"] == 2
+        assert d["rango"]["max"] < 1000  # ningún peso chileno se coló
+    finally:
+        vr.settings = original
+        ref.set_provider(ref.NullProvider())
+        ref.reiniciar_cupo()
+        ref.limpiar_transitorio()
+
+
+def test_reference_sin_tiendas_peruanas(client):
+    import app.valuation.reference as ref
+    import app.valuation.router as vr
+    from dataclasses import replace
+    from app.valuation.reference import ResultadoBusqueda
+
+    original = vr.settings
+    ref.reiniciar_cupo()
+    ref.limpiar_transitorio()
+    proveedor = _ProveedorFalso([
+        ResultadoBusqueda("Termo $45.000", "", "https://listado.mercadolibre.cl/x"),
+        ResultadoBusqueda("Termo $67.500", "", "https://www.idealo.es/y"),
+    ])
+    try:
+        ref.set_provider(proveedor)
+        vr.settings = replace(original, valuation_enabled=True,
+                              reference_search_enabled=True, brave_api_key="x")
+        d = client.post("/v1/valuation/reference",
+                        json={"consulta": "termo electrico"}).json()
+        assert d["rango"] is None
+        assert "tiendas peruanas" in d["aviso"]
+    finally:
+        vr.settings = original
+        ref.set_provider(ref.NullProvider())
+        ref.reiniciar_cupo()
+        ref.limpiar_transitorio()
+
+
+def test_reference_acepta_precios_en_dolares(client):
+    """Una tienda peruana puede publicar en USD: debe servir igual."""
+    import app.valuation.reference as ref
+    import app.valuation.router as vr
+    from dataclasses import replace
+    from app.valuation.reference import ResultadoBusqueda
+
+    original = vr.settings
+    ref.reiniciar_cupo()
+    ref.limpiar_transitorio()
+    proveedor = _ProveedorFalso([
+        ResultadoBusqueda("Camiseta algodon US$ 16.90", "", "https://www.falabella.com.pe/a"),
+        ResultadoBusqueda("Camiseta algodon US$ 18.00", "", "https://www.ripley.com.pe/b"),
+    ])
+    try:
+        ref.set_provider(proveedor)
+        vr.settings = replace(original, valuation_enabled=True,
+                              reference_search_enabled=True, brave_api_key="x")
+        r = client.post("/v1/valuation/reference", json={
+            "consulta": "camiseta algodon",
+            "codigo": "6109.10.00.50",
+            "cantidad": 100,
+        })
+        assert r.status_code == 200, r.text
+        d = r.json()
+        assert d["moneda"] == "USD"
+        assert d["rangos"]["PEN"] is None
+        assert d["rangos"]["USD"] is not None
+        est = d["estimacion_aduanera"]
+        assert est is not None
+        assert est["moneda_precio_venta"] == "USD"
+        assert est["valor_deducido_unitario_usd"] > 0
+    finally:
+        vr.settings = original
+        ref.set_provider(ref.NullProvider())
+        ref.reiniciar_cupo()
+        ref.limpiar_transitorio()
+
+
+def test_reference_devuelve_ambas_monedas(client):
+    import app.valuation.reference as ref
+    import app.valuation.router as vr
+    from dataclasses import replace
+    from app.valuation.reference import ResultadoBusqueda
+
+    original = vr.settings
+    ref.reiniciar_cupo()
+    ref.limpiar_transitorio()
+    proveedor = _ProveedorFalso([
+        ResultadoBusqueda("Termo S/ 79,90", "", "https://www.falabella.com.pe/a"),
+        ResultadoBusqueda("Termo S/ 85,00", "", "https://www.ripley.com.pe/b"),
+        ResultadoBusqueda("Termo US$ 22.00", "", "https://www.coolbox.pe/c"),
+        ResultadoBusqueda("Termo US$ 24.00", "", "https://www.hiraoka.com.pe/d"),
+    ])
+    try:
+        ref.set_provider(proveedor)
+        vr.settings = replace(original, valuation_enabled=True,
+                              reference_search_enabled=True, brave_api_key="x")
+        d = client.post("/v1/valuation/reference",
+                        json={"consulta": "termo electrico"}).json()
+        assert d["moneda"] == "PEN"  # se prefiere la moneda local
+        assert d["rangos"]["PEN"]["muestras"] == 2
+        assert d["rangos"]["USD"]["muestras"] == 2
+    finally:
+        vr.settings = original
+        ref.set_provider(ref.NullProvider())
+        ref.reiniciar_cupo()
+        ref.limpiar_transitorio()
 
 
 if __name__ == "__main__":

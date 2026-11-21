@@ -192,15 +192,34 @@ REFERENCE_MONTHLY_LIMIT = 990
   "consulta": "termo electrico 1.5l",
   "rango": { "min": 79.90, "mediana": 82.50, "max": 85.00, "muestras": 3 },
   "moneda": "PEN",
-  "fuentes": ["mercadolibre.com.pe", "falabella.com.pe"],
+  "rangos": {
+    "PEN": { "min": 79.90, "mediana": 82.50, "max": 85.00, "muestras": 3 },
+    "USD": { "min": 22.00, "mediana": 23.00, "max": 24.00, "muestras": 2 }
+  },
+  "fuentes": ["falabella.com.pe", "ripley.com.pe"],
+  "resultados_ignorados": 4,
   "cupo": { "usadas": 1, "limite": 990, "restantes": 989 },
   "estimacion_aduanera": {
     "metodo": 4,
+    "precio_venta_usado": 82.50,
+    "moneda_precio_venta": "PEN",
     "valor_deducido_unitario_usd": 7.42,
     "tributos": { "...": "..." }
   }
 }
 ```
+
+### Dos reglas de oro del precio
+
+1. **Solo tiendas peruanas** (dominio `.pe`). Sin este filtro, Brave devuelve
+   MercadoLibre Chile o Argentina y un termo aparece a "S/ 67 500", que en
+   realidad son pesos. Los resultados de otros países se descartan y se
+   informan en `resultados_ignorados`.
+2. **Soles o dólares**, según publique la tienda. Se devuelven ambos rangos por
+   separado (`rangos.PEN` y `rangos.USD`), nunca mezclados ni convertidos. El
+   rango principal prefiere soles; si la tienda solo publica en USD, se usa USD
+   y la estimación se calcula con esa moneda.
+
 
 ### Reglas de cumplimiento (términos de Brave)
 

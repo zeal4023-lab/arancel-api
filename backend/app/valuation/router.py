@@ -317,20 +317,23 @@ def referencia_precios(body: ReferenceRequest, request: Request):
 
     # Estimación con método 4 usando el precio mediano (solo si hay código).
     rango = resultado.get("rango")
-    if body.codigo and rango and resultado.get("moneda") == "PEN":
+    if body.codigo and rango:
         try:
             nodo = request.app.state.service.get_code(body.codigo)
             if nodo is not None and getattr(nodo, "is_leaf", False):
-                fx = get_usd_pen(
-                    body.tipo_cambio,
-                    timeout=settings.valuation_fx_timeout_s,
-                    ttl_h=settings.valuation_fx_cache_h,
-                )
+                moneda_precio = resultado.get("moneda") or "PEN"
+                fx = None
+                if moneda_precio == "PEN":
+                    fx = get_usd_pen(
+                        body.tipo_cambio,
+                        timeout=settings.valuation_fx_timeout_s,
+                        ttl_h=settings.valuation_fx_cache_h,
+                    )
                 est = calcular_deductivo(
                     nodo=nodo,
                     cantidad=body.cantidad,
                     precio_venta_unitario=Decimal(str(rango["mediana"])),
-                    moneda="PEN",
+                    moneda=moneda_precio,
                     incluye_igv=body.incluye_igv,
                     margen_pct=body.margen_pct,
                     gastos_internos=Decimal("0"),
@@ -343,6 +346,7 @@ def referencia_precios(body: ReferenceRequest, request: Request):
                 resultado["estimacion_aduanera"] = {
                     "metodo": 4,
                     "precio_venta_usado": rango["mediana"],
+                    "moneda_precio_venta": moneda_precio,
                     "valor_deducido_unitario_usd": est["valor_deducido"]["unitario_usd"],
                     "valor_deducido_total_usd": est["valor_deducido"]["total_usd"],
                     "tributos": est["equivalente"]["tributos"],

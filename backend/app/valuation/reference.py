@@ -73,6 +73,17 @@ class BraveProvider:
 
     URL = "https://api.search.brave.com/res/v1/web/search"
 
+    # Combinaciones de parámetros opcionales, de la más específica a la más
+    # simple. Si Brave rechaza una (422), se baja un escalón y se recuerda
+    # la que funciona para no repetir el error en cada llamada.
+    _COMBOS = (
+        {"country": "pe", "search_lang": "es", "safesearch": "moderate"},
+        {"country": "pe", "search_lang": "es"},
+        {"search_lang": "es"},
+        {},
+    )
+    _combo_desde = 0
+
     def __init__(self, api_key: str, timeout: float = 8.0) -> None:
         if not api_key:
             raise ReferenceUnavailable("Falta BRAVE_API_KEY.")
@@ -131,27 +142,30 @@ class BraveProvider:
 
     def buscar(self, consulta: str, cantidad: int) -> list[ResultadoBusqueda]:
         n = max(1, min(cantidad, 20))
-        completo = {
-            "q": consulta,
-            "count": n,
-            # Preferencias de localización: si Brave deja de aceptarlas, el
-            # reintento mínimo de abajo mantiene el servicio funcionando.
-            "country": "pe",
-            "search_lang": "es",
-            "safesearch": "moderate",
-        }
-        try:
-            data = self._get(completo)
-        except _HttpError as exc:
-            if exc.code != 422:
-                raise self._mapear(exc) from None
-            log.warning("Brave rechazó los parámetros de localización (422): %s",
-                        " ".join(exc.cuerpo.split())[:160])
+        ultimo: _HttpError | None = None
+        for idx in range(BraveProvider._combo_desde, len(self._COMBOS)):
+            params = {"q": consulta, "count": n, **self._COMBOS[idx]}
             try:
-                data = self._get({"q": consulta, "count": n})
-            except _HttpError as exc2:
-                raise self._mapear(exc2) from None
+                data = self._get(params)
+            except _HttpError as exc:
+                if exc.code == 422:
+                    log.warning(
+                        "Brave rechazó la combinación %s (422): %s",
+                        sorted(self._COMBOS[idx]),
+                        " ".join(exc.cuerpo.split())[:160],
+                    )
+                    ultimo = exc
+                    continue
+                raise self._mapear(exc) from None
+            BraveProvider._combo_desde = idx
+            return self._parsear(data)
 
+        if ultimo is not None:
+            raise self._mapear(ultimo) from None
+        raise ReferenceUnavailable("Brave no devolvió resultados utilizables.")
+
+    @staticmethod
+    def _parsear(data: dict) -> list[ResultadoBusqueda]:
         resultados = ((data or {}).get("web") or {}).get("results") or []
         salida: list[ResultadoBusqueda] = []
         for r in resultados:
@@ -363,6 +377,12 @@ def reiniciar_cupo() -> None:
     _ultimo_error = None
 
 
+def _es_peruano(url: str) -> bool:
+    """Solo se aceptan tiendas peruanas: evita mezclar pesos con soles."""
+    host = (urllib.parse.urlparse(url).hostname or "").lower()
+    return host.endswith(".pe")
+
+
 def consultar_referencia(
     consulta: str,
     *,
@@ -389,15 +409,34 @@ def consultar_referencia(
         _anotar_error(str(exc))
         raise
 
-    soles, dolares = extraer_precios(resultados)
+    peruanos = [r for r in resultados if _es_peruano(r.url)]
+    ignorados = len(resultados) - len(peruanos)
+
+    soles, dolares = extraer_precios(peruanos)
     resumen_soles = resumir(soles)
     resumen_dolares = resumir(dolares)
 
     dominios: list[str] = []
-    for r in resultados:
+    for r in peruanos:
         host = urllib.parse.urlparse(r.url).hostname or ""
         if host and host not in dominios:
             dominios.append(host)
+
+    if not peruanos:
+        _anotar_error(None)
+        return {
+            "ok": True,
+            "referencial": True,
+            "consulta": consulta,
+            "rango": None,
+            "fuentes": [],
+            "resultados_ignorados": ignorados,
+            "aviso": (
+                "No se encontraron tiendas peruanas para esta búsqueda. "
+                "Se descartan resultados de otros países para no mezclar "
+                "monedas. Prueba con marca, modelo o capacidad."
+            ),
+        }
 
     if resumen_soles is None and resumen_dolares is None:
         _anotar_error(None)
@@ -407,24 +446,29 @@ def consultar_referencia(
             "consulta": consulta,
             "rango": None,
             "fuentes": dominios[:5],
+            "resultados_ignorados": ignorados,
             "aviso": (
-                "No se encontraron precios utilizables en los resultados. "
+                "No se encontraron precios utilizables en tiendas peruanas. "
                 "Prueba con una descripción más específica (marca, modelo, "
                 "capacidad)."
             ),
         }
 
     _anotar_error(None)
+    primario = resumen_soles or resumen_dolares
     return {
         "ok": True,
         "referencial": True,
         "consulta": consulta,
-        "rango": resumen_soles or resumen_dolares,
+        # Rango principal: se prefiere soles (moneda local), pero si la tienda
+        # publica en dólares se devuelve igual y se etiqueta la moneda.
+        "rango": primario,
         "moneda": "PEN" if resumen_soles else "USD",
-        "rango_alterno": resumen_dolares if resumen_soles and resumen_dolares else None,
+        "rangos": {"PEN": resumen_soles, "USD": resumen_dolares},
         "fuentes": dominios[:5],
+        "resultados_ignorados": ignorados,
         "aviso": (
-            "Precio referencial obtenido de resultados web. No es valor en "
+            "Precio referencial obtenido de tiendas peruanas. No es valor en "
             "aduana, no constituye prueba documental y no reemplaza la "
             "determinación de SUNAT."
         ),
