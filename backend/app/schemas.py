@@ -59,6 +59,9 @@ class VisionOut(BaseModel):
     categoria: str
     descripcion: str
     atributos: dict[str, Any]
+    # Aditivo (VISION_ATRIBUTOS_V2): atributos pensados para buscar precios.
+    # Las APK antiguas lo ignoran.
+    atributos_precio: dict[str, Any] | None = None
     nivel_confianza: float
     motivo_baja_confianza: str | None = None
 

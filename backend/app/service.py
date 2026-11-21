@@ -32,6 +32,8 @@ from .prompts import (
     VISION_SCHEMA,
     VISION_SYSTEM,
     VISION_USER,
+    vision_schema,
+    vision_system,
 )
 from .retrieval import BM25Retriever, Candidate
 
@@ -86,16 +88,20 @@ class ClassificationService:
     # Paso 0: visión
     # ------------------------------------------------------------------
     def describe_image(self, image_b64: str) -> dict[str, Any]:
+        con_precio = bool(getattr(self.cfg, "vision_atributos_v2", False))
         result = self.llm.vision(
-            system=VISION_SYSTEM,
+            system=vision_system(con_precio),
             user=VISION_USER,
-            schema=VISION_SCHEMA,
+            schema=vision_schema(con_precio),
             name="vision",
             image_b64=image_b64,
             model=self.cfg.vision_model,
         )
         # Normalización defensiva del contrato.
         result.setdefault("atributos", {})
+        if con_precio:
+            # Si el proveedor no devolvió el bloque, se deja vacío en vez de fallar.
+            result.setdefault("atributos_precio", {})
         result["descripcion"] = (result.get("descripcion") or "").strip()
         if not result["descripcion"]:
             result["es_identificable"] = False

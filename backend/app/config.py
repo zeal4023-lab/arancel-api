@@ -67,8 +67,14 @@ class Settings:
     confidence_verify: int = _env_int("CONFIDENCE_VERIFY", 60)
     verify_enabled: bool = os.getenv("VERIFY_ENABLED", "true").lower() == "true"
 
-    # --- Valoración aduanera (F1) -------------------------------------------
-    # Apagada por defecto: el código se despliega sin exponer el endpoint.
+    # --- Visión: atributos para búsqueda de precios (F2) --------------------
+    # Añade "atributos_precio" a /v1/describe. Aditivo y opcional: los campos
+    # actuales no cambian. Apagado = comportamiento anterior.
+    vision_atributos_v2: bool = (
+        os.getenv("VISION_ATRIBUTOS_V2", "false").lower() == "true"
+    )
+
+    # --- Valoración aduanera (F1) -------------------------------------------    # Apagada por defecto: el código se despliega sin exponer el endpoint.
     valuation_enabled: bool = os.getenv("VALUATION_ENABLED", "false").lower() == "true"
     valuation_api_version: str = os.getenv("VALUATION_API_VERSION", "1.1")
     # Tipo de cambio: timeout corto y caché en memoria. Nunca bloquea.

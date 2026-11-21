@@ -59,6 +59,56 @@ Describe el producto de la imagen para clasificarlo en el arancel de aduanas.
 Recuerda: describir, no clasificar. Responde solo con el JSON del esquema."""
 
 
+# ---------------------------------------------------------------------------
+# Atributos para búsqueda de precios (VISION_ATRIBUTOS_V2)
+# ---------------------------------------------------------------------------
+# Se añaden como bloque separado para no tocar NADA del prompt actual, que
+# alimenta la clasificación. Si el flag está apagado, no se envía nada.
+
+_ATRIBUTOS_PRECIO_CLAVES = (
+    "conexion", "tipo", "capacidad", "potencia", "tamano", "material_visible",
+)
+
+ATRIBUTOS_PRECIO_INSTRUCCION = """\
+
+Además, añade el campo "atributos_precio". Sirve SOLO para buscar precios en
+tiendas, nunca para clasificar. Usa estas claves exactas y sé breve:
+  - "conexion": bluetooth, usb, wifi, cable, ninguno...
+  - "tipo": inalámbrico, óptico, recargable, manual, eléctrico...
+  - "capacidad": "1.5 l", "30 ml", "500 g"...
+  - "potencia": "1200 w"...
+  - "tamano": "14 pulgadas", "30 cm"...
+  - "material_visible": vidrio, acero, cuero, plástico...
+Devuelve null en lo que no se vea con claridad. No inventes marca ni modelo."""
+
+ATRIBUTOS_PRECIO_JSON = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": list(_ATRIBUTOS_PRECIO_CLAVES),
+    "properties": {clave: {"type": ["string", "null"]}
+                   for clave in _ATRIBUTOS_PRECIO_CLAVES},
+}
+
+
+def vision_system(con_atributos_precio: bool = False) -> str:
+    """Prompt de visión. Con el flag, solo se AÑADE una instrucción."""
+    if not con_atributos_precio:
+        return VISION_SYSTEM
+    return VISION_SYSTEM + ATRIBUTOS_PRECIO_INSTRUCCION
+
+
+def vision_schema(con_atributos_precio: bool = False) -> dict:
+    """Esquema de visión. Con el flag, se AÑADE un campo opcional."""
+    if not con_atributos_precio:
+        return VISION_SCHEMA
+    import copy
+
+    esquema = copy.deepcopy(VISION_SCHEMA)
+    esquema["properties"]["atributos_precio"] = copy.deepcopy(ATRIBUTOS_PRECIO_JSON)
+    esquema["required"] = list(esquema["required"]) + ["atributos_precio"]
+    return esquema
+
+
 FUSION_SYSTEM = """\
 Eres un analista que prepara la ficha técnica de un producto para clasificación \
 arancelaria. Debes FUSIONAR la descripción automática de la imagen, lo que \

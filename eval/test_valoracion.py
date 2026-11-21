@@ -896,5 +896,60 @@ def test_reference_normaliza_fuentes(client):
         ref.limpiar_transitorio()
 
 
+def test_vision_atributos_precio_no_rompe_el_contrato():
+    """Con el flag apagado, prompt y esquema deben ser EXACTAMENTE los de antes."""
+    from app.prompts import (
+        VISION_SCHEMA, VISION_SYSTEM, vision_schema, vision_system,
+    )
+
+    assert vision_system(False) == VISION_SYSTEM
+    assert vision_schema(False) is VISION_SCHEMA
+    assert "atributos_precio" not in VISION_SCHEMA["properties"]
+
+
+def test_vision_atributos_precio_es_aditivo():
+    from app.prompts import (
+        VISION_SCHEMA, VISION_SYSTEM, vision_schema, vision_system,
+    )
+
+    prompt = vision_system(True)
+    assert prompt.startswith(VISION_SYSTEM)          # no se reescribe nada
+    assert "atributos_precio" in prompt
+
+    esquema = vision_schema(True)
+    assert "atributos_precio" in esquema["properties"]
+    assert "atributos_precio" in esquema["required"]
+    # El resto del contrato queda intacto.
+    for campo in ("es_identificable", "objeto", "categoria", "descripcion",
+                  "atributos", "nivel_confianza", "motivo_baja_confianza"):
+        assert campo in esquema["properties"]
+        assert campo in esquema["required"]
+    # El esquema original no se muta.
+    assert "atributos_precio" not in VISION_SCHEMA["properties"]
+
+    claves = esquema["properties"]["atributos_precio"]["required"]
+    assert set(claves) == {
+        "conexion", "tipo", "capacidad", "potencia", "tamano", "material_visible",
+    }
+
+
+def test_vision_out_acepta_el_campo_nuevo():
+    from app.schemas import VisionOut
+
+    base = {
+        "es_identificable": True,
+        "objeto": "ratón",
+        "categoria": "periférico",
+        "descripcion": "ratón inalámbrico",
+        "atributos": {},
+        "nivel_confianza": 0.9,
+    }
+    sin = VisionOut(**base)
+    assert sin.atributos_precio is None
+
+    con = VisionOut(**base, atributos_precio={"conexion": "bluetooth"})
+    assert con.atributos_precio == {"conexion": "bluetooth"}
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))

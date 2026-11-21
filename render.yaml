@@ -51,3 +51,7 @@ services:
         value: "true"
       - key: REFERENCE_MONTHLY_LIMIT
         value: "990"
+      # Atributos de visión para buscar precios (aditivo). Si /v1/describe
+      # empieza a fallar, poner "false" y redeploy: vuelve al contrato anterior.
+      - key: VISION_ATRIBUTOS_V2
+        value: "true"
