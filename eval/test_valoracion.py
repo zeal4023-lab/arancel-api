@@ -697,7 +697,7 @@ def test_reference_ignora_tiendas_de_otros_paises(client):
         assert r.status_code == 200, r.text
         d = r.json()
         assert d["resultados_ignorados"] == 2
-        assert d["fuentes"] == ["www.falabella.com.pe", "www.ripley.com.pe"]
+        assert d["fuentes"] == ["falabella.com.pe", "ripley.com.pe"]
         assert d["rango"] is not None
         assert d["rango"]["muestras"] == 2
         assert d["rango"]["max"] < 1000  # ningún peso chileno se coló
@@ -859,6 +859,36 @@ def test_reference_mercado_us_devuelve_dolares(client):
         # Un precio de EE. UU. NO se usa para el método 4.
         assert d["estimacion_aduanera"] is None
         assert "Estados Unidos" in d["aviso"]
+    finally:
+        vr.settings = original
+        ref.set_provider(ref.NullProvider())
+        ref.reiniciar_cupo()
+        ref.limpiar_transitorio()
+
+
+def test_reference_normaliza_fuentes(client):
+    """www.amazon.com y amazon.com son la misma fuente."""
+    import app.valuation.reference as ref
+    import app.valuation.router as vr
+    from dataclasses import replace
+    from app.valuation.reference import ResultadoBusqueda
+
+    original = vr.settings
+    ref.reiniciar_cupo()
+    ref.limpiar_transitorio()
+    proveedor = _ProveedorFalso([
+        ResultadoBusqueda("Mouse $15.00", "", "https://www.amazon.com/dp/A"),
+        ResultadoBusqueda("Mouse $15.00", "", "https://amazon.com/dp/B"),
+    ])
+    try:
+        ref.set_provider(proveedor)
+        vr.settings = replace(original, valuation_enabled=True,
+                              reference_search_enabled=True, brave_api_key="x")
+        d = client.post("/v1/valuation/reference", json={
+            "consulta": "mouse", "mercado": "US"}).json()
+        assert d["fuentes"] == ["amazon.com"]
+        # Con 2 muestras debe avisar que es poca evidencia.
+        assert "poca" in d["aviso"].lower() or "pista" in d["aviso"].lower()
     finally:
         vr.settings = original
         ref.set_provider(ref.NullProvider())

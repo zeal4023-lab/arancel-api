@@ -435,12 +435,16 @@ _DOMINIOS_US = {
 
 
 def _aceptar(url: str, mercado: str) -> bool:
-    host = (urllib.parse.urlparse(url).hostname or "").lower()
-    if host.startswith("www."):
-        host = host[4:]
+    host = _host_limpio(url)
     if mercado == "US":
         return host in _DOMINIOS_US or host.endswith(".us")
     return host.endswith(".pe")
+
+
+def _host_limpio(url: str) -> str:
+    """Dominio sin 'www.' ni mayúsculas, para no duplicar fuentes."""
+    host = (urllib.parse.urlparse(url).hostname or "").lower()
+    return host[4:] if host.startswith("www.") else host
 
 
 def _con_contexto_peru(consulta: str, mercado: str = "PE") -> str:
@@ -490,7 +494,7 @@ def consultar_referencia(
 
     dominios: list[str] = []
     for r in aceptados:
-        host = urllib.parse.urlparse(r.url).hostname or ""
+        host = _host_limpio(r.url)
         if host and host not in dominios:
             dominios.append(host)
 
@@ -554,6 +558,12 @@ def consultar_referencia(
             "Precio referencial obtenido de tiendas peruanas. No es valor en "
             "aduana, no constituye prueba documental y no reemplaza la "
             "determinación de SUNAT."
+        )
+
+    if primario and primario.get("muestras", 0) < 3:
+        aviso += (
+            f" Solo {primario['muestras']} precio(s) encontrado(s): tómalo "
+            "como una pista, no como un rango sólido."
         )
 
     return {
