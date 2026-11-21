@@ -777,6 +777,57 @@ def test_consulta_con_contexto_peru():
     assert _con_contexto_peru("termo electrico Perú") == "termo electrico Perú"
     assert _con_contexto_peru("termo electrico peru") == "termo electrico peru"
     assert _con_contexto_peru("  termo   electrico  ") == "termo electrico Perú"
+    # En EE. UU. no se añade contexto de país.
+    assert _con_contexto_peru("termo electrico", "US") == "termo electrico"
+
+
+def test_aceptar_dominios_por_mercado():
+    from app.valuation.reference import _aceptar
+
+    assert _aceptar("https://www.falabella.com.pe/x", "PE") is True
+    assert _aceptar("https://www.amazon.com/dp/X", "PE") is False
+    assert _aceptar("https://www.amazon.com/dp/X", "US") is True
+    assert _aceptar("https://www.bestbuy.com/x", "US") is True
+    assert _aceptar("https://listado.mercadolibre.cl/x", "US") is False
+    assert _aceptar("https://tienda.com.ar/x", "US") is False
+
+
+def test_reference_mercado_us_devuelve_dolares(client):
+    import app.valuation.reference as ref
+    import app.valuation.router as vr
+    from dataclasses import replace
+    from app.valuation.reference import ResultadoBusqueda
+
+    original = vr.settings
+    ref.reiniciar_cupo()
+    ref.limpiar_transitorio()
+    proveedor = _ProveedorFalso([
+        ResultadoBusqueda("Thermos 1.5L $29.99", "", "https://www.amazon.com/dp/A"),
+        ResultadoBusqueda("Thermos 1.5L $34.50", "", "https://www.bestbuy.com/x"),
+        ResultadoBusqueda("Termo S/ 79,90", "", "https://www.falabella.com.pe/z"),
+    ])
+    try:
+        ref.set_provider(proveedor)
+        vr.settings = replace(original, valuation_enabled=True,
+                              reference_search_enabled=True, brave_api_key="x")
+        d = client.post("/v1/valuation/reference", json={
+            "consulta": "thermos 1.5l",
+            "mercado": "US",
+            "codigo": "8516.10.00.00",
+        }).json()
+        assert d["mercado"] == "US"
+        assert d["moneda"] == "USD"
+        assert d["rangos"]["PEN"] is None
+        assert d["rangos"]["USD"]["muestras"] == 2
+        assert d["resultados_ignorados"] == 1
+        # Un precio de EE. UU. NO se usa para el método 4.
+        assert d["estimacion_aduanera"] is None
+        assert "Estados Unidos" in d["aviso"]
+    finally:
+        vr.settings = original
+        ref.set_provider(ref.NullProvider())
+        ref.reiniciar_cupo()
+        ref.limpiar_transitorio()
 
 
 if __name__ == "__main__":

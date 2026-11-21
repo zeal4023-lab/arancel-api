@@ -220,6 +220,32 @@ REFERENCE_MONTHLY_LIMIT = 990
    rango principal prefiere soles; si la tienda solo publica en USD, se usa USD
    y la estimación se calcula con esa moneda.
 
+### Mercados: `PE` y `US`
+
+| `mercado` | Busca en | Moneda | ¿Alimenta el método 4? |
+|---|---|---|---|
+| `PE` (por defecto) | Tiendas `.pe` | PEN o USD | **Sí** (precio de reventa en Perú) |
+| `US` | Amazon, Walmart, Best Buy, Target… | USD | **No** |
+
+**Por qué `US` no usa el método 4:** el valor deductivo exige el precio de
+reventa **en el país de importación** (Perú). Un precio de Amazon no es eso.
+
+Para qué sirve entonces `US`: para juzgar si el FOB declarado es creíble. Si el
+producto se vende en Amazon a US$ 30 y declaras FOB US$ 3, es plausible
+(margen, flete, tributos). Si declaras US$ 45, algo no cuadra.
+
+El cliente puede enviar `precio_declarado_unitario` y recibir `comparacion`:
+
+```json
+"comparacion": {
+  "precio_declarado_usd": 3.00,
+  "precio_mercado_us_usd": 29.99,
+  "ratio_pct": 10.00,
+  "nota": "Comparación contra precio de mercado en EE. UU. ..."
+}
+```
+
+
 
 ### Reglas de cumplimiento (términos de Brave)
 

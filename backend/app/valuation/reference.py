@@ -383,12 +383,36 @@ def _es_peruano(url: str) -> bool:
     return host.endswith(".pe")
 
 
-def _con_contexto_peru(consulta: str) -> str:
+# Tiendas de EE. UU. con precio publicado en dólares. Lista explícita: aceptar
+# cualquier ".com" metería sitios de otros países y rompería la moneda.
+_DOMINIOS_US = {
+    "amazon.com", "walmart.com", "bestbuy.com", "target.com", "homedepot.com",
+    "lowes.com", "costco.com", "ebay.com", "macys.com", "nike.com",
+    "apple.com", "newegg.com", "bhphotovideo.com", "adorama.com", "rei.com",
+    "kohls.com", "wayfair.com", "chewy.com", "sephora.com", "walgreens.com",
+    "cvs.com", "staples.com", "officedepot.com", "ikea.com", "overstock.com",
+    "zappos.com", "nordstrom.com", "samsclub.com", "microcenter.com",
+    "petco.com", "petsmart.com", "dickssportinggoods.com", "academy.com",
+}
+
+
+def _aceptar(url: str, mercado: str) -> bool:
+    host = (urllib.parse.urlparse(url).hostname or "").lower()
+    if host.startswith("www."):
+        host = host[4:]
+    if mercado == "US":
+        return host in _DOMINIOS_US or host.endswith(".us")
+    return host.endswith(".pe")
+
+
+def _con_contexto_peru(consulta: str, mercado: str = "PE") -> str:
     """
     Brave rechaza `country=pe`, así que el contexto se pide en el texto.
     Sin esto la búsqueda devuelve tiendas de Chile, Argentina o España.
     """
     limpio = " ".join(consulta.split())
+    if mercado == "US":
+        return limpio
     bajo = limpio.lower()
     if "peru" in bajo or "perú" in bajo:
         return limpio
@@ -400,6 +424,7 @@ def consultar_referencia(
     *,
     cantidad: int,
     limite_mensual: int,
+    mercado: str = "PE",
 ) -> dict:
     """
     Busca precios de referencia. Devuelve un resumen listo para la API.
@@ -412,7 +437,7 @@ def consultar_referencia(
         raise ReferenceUnavailable("La búsqueda es demasiado corta.")
 
     _consumir_cupo(limite_mensual)
-    consulta_enviada = _con_contexto_peru(consulta)
+    consulta_enviada = _con_contexto_peru(consulta, mercado)
     try:
         resultados = _buscar_con_transitorio(consulta_enviada, cantidad)
     except ReferenceLimitReached as exc:
@@ -422,33 +447,41 @@ def consultar_referencia(
         _anotar_error(str(exc))
         raise
 
-    peruanos = [r for r in resultados if _es_peruano(r.url)]
-    ignorados = len(resultados) - len(peruanos)
-
-    soles, dolares = extraer_precios(peruanos)
-    resumen_soles = resumir(soles)
-    resumen_dolares = resumir(dolares)
+    aceptados = [r for r in resultados if _aceptar(r.url, mercado)]
+    ignorados = len(resultados) - len(aceptados)
 
     dominios: list[str] = []
-    for r in peruanos:
+    for r in aceptados:
         host = urllib.parse.urlparse(r.url).hostname or ""
         if host and host not in dominios:
             dominios.append(host)
 
-    if not peruanos:
+    if mercado == "US":
+        # En EE. UU. solo interesa el precio en dólares.
+        _, dolares = extraer_precios(aceptados)
+        resumen_soles = None
+        resumen_dolares = resumir(dolares)
+        etiqueta = "tiendas de Estados Unidos"
+    else:
+        soles, dolares = extraer_precios(aceptados)
+        resumen_soles = resumir(soles)
+        resumen_dolares = resumir(dolares)
+        etiqueta = "tiendas peruanas"
+
+    if not aceptados:
         _anotar_error(None)
         return {
             "ok": True,
             "referencial": True,
+            "mercado": mercado,
             "consulta": consulta,
             "consulta_enviada": consulta_enviada,
             "rango": None,
             "fuentes": [],
             "resultados_ignorados": ignorados,
             "aviso": (
-                "No se encontraron tiendas peruanas para esta búsqueda. "
-                "Se descartan resultados de otros países para no mezclar "
-                "monedas. Prueba con marca, modelo o capacidad."
+                f"No se encontraron resultados de {etiqueta} para esta "
+                "búsqueda. Prueba con marca, modelo o capacidad."
             ),
         }
 
@@ -457,13 +490,14 @@ def consultar_referencia(
         return {
             "ok": True,
             "referencial": True,
+            "mercado": mercado,
             "consulta": consulta,
             "consulta_enviada": consulta_enviada,
             "rango": None,
             "fuentes": dominios[:5],
             "resultados_ignorados": ignorados,
             "aviso": (
-                "No se encontraron precios utilizables en tiendas peruanas. "
+                f"No se encontraron precios utilizables en {etiqueta}. "
                 "Prueba con una descripción más específica (marca, modelo, "
                 "capacidad)."
             ),
@@ -471,9 +505,23 @@ def consultar_referencia(
 
     _anotar_error(None)
     primario = resumen_soles or resumen_dolares
+    if mercado == "US":
+        aviso = (
+            "Precio referencial de tiendas de Estados Unidos (USD). Sirve "
+            "para juzgar si el valor declarado es razonable; no es valor en "
+            "aduana ni precio de reventa en Perú."
+        )
+    else:
+        aviso = (
+            "Precio referencial obtenido de tiendas peruanas. No es valor en "
+            "aduana, no constituye prueba documental y no reemplaza la "
+            "determinación de SUNAT."
+        )
+
     return {
         "ok": True,
         "referencial": True,
+        "mercado": mercado,
         "consulta": consulta,
         "consulta_enviada": consulta_enviada,
         # Rango principal: se prefiere soles (moneda local), pero si la tienda
@@ -483,9 +531,5 @@ def consultar_referencia(
         "rangos": {"PEN": resumen_soles, "USD": resumen_dolares},
         "fuentes": dominios[:5],
         "resultados_ignorados": ignorados,
-        "aviso": (
-            "Precio referencial obtenido de tiendas peruanas. No es valor en "
-            "aduana, no constituye prueba documental y no reemplaza la "
-            "determinación de SUNAT."
-        ),
+        "aviso": aviso,
     }

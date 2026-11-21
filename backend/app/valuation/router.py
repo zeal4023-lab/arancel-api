@@ -298,6 +298,7 @@ def referencia_precios(body: ReferenceRequest, request: Request):
             body.consulta,
             cantidad=settings.reference_count,
             limite_mensual=settings.reference_monthly_limit,
+            mercado=body.mercado,
         )
     except ReferenceLimitReached as exc:
         return _error(429, "REFERENCE_LIMIT_REACHED", str(exc))
@@ -315,9 +316,11 @@ def referencia_precios(body: ReferenceRequest, request: Request):
     resultado["cupo"] = estado_cupo(settings.reference_monthly_limit)
     resultado["estimacion_aduanera"] = None
 
-    # Estimación con método 4 usando el precio mediano (solo si hay código).
+    # Estimación con método 4 usando el precio mediano.
+    # Solo con mercado PE: el método 4 exige precio de reventa EN PERÚ. Un
+    # precio de Amazon no sirve para deducir el valor en aduana.
     rango = resultado.get("rango")
-    if body.codigo and rango:
+    if body.codigo and rango and body.mercado == "PE":
         try:
             nodo = request.app.state.service.get_code(body.codigo)
             if nodo is not None and getattr(nodo, "is_leaf", False):
@@ -358,6 +361,27 @@ def referencia_precios(body: ReferenceRequest, request: Request):
             # La referencia sigue siendo útil aunque falle la estimación.
             log.warning("Fallo la estimación desde referencia: %s", exc)
             resultado["aviso_estimacion"] = "No se pudo estimar el valor en aduana."
+
+    # Mercado US: el precio es de referencia para juzgar el FOB declarado.
+    if body.mercado == "US" and rango and body.precio_declarado_unitario:
+        try:
+            declarado = Decimal(str(body.precio_declarado_unitario))
+            mediana = Decimal(str(rango["mediana"]))
+            if mediana > 0:
+                ratio = (declarado / mediana * 100).quantize(Decimal("0.01"))
+                resultado["comparacion"] = {
+                    "precio_declarado_usd": float(declarado),
+                    "precio_mercado_us_usd": float(mediana),
+                    "ratio_pct": float(ratio),
+                    "nota": (
+                        "Comparación contra precio de mercado en EE. UU. Si el "
+                        "FOB declarado es una fracción pequeña del precio de "
+                        "venta, puede ser normal (margen, flete, tributos); si "
+                        "es casi igual o mayor, revisa los datos."
+                    ),
+                }
+        except Exception as exc:  # noqa: BLE001
+            log.warning("Fallo la comparación de referencia US: %s", exc)
 
     return resultado
 

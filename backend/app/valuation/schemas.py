@@ -88,8 +88,12 @@ class ReferenceRequest(BaseModel):
 
     api_version: str = Field(default="1.1", max_length=16)
     consulta: str = Field(..., min_length=3, max_length=160)
+    # Mercado de referencia:
+    #   PE -> tiendas peruanas (alimenta el método 4)
+    #   US -> tiendas de EE. UU. (referencia en USD para juzgar el FOB)
+    mercado: Literal["PE", "US"] = "PE"
     # Si se envía el código, además del rango se devuelve la estimación
-    # del valor en aduana con el método 4.
+    # del valor en aduana con el método 4 (solo mercado PE).
     codigo: str | None = Field(default=None, max_length=20)
     origen: str | None = Field(default=None, max_length=40)
     cantidad: Decimal = Field(default=Decimal("1"), gt=0)
