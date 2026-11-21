@@ -587,5 +587,51 @@ def test_reference_estima_valor_en_aduana(client):
         ref.limpiar_transitorio()
 
 
+def test_brave_reintenta_sin_localizacion(monkeypatch):
+    """Si Brave rechaza country/search_lang, se reintenta con lo mínimo."""
+    from app.valuation.reference import BraveProvider, _HttpError
+
+    prov = BraveProvider("clave")
+    llamadas = []
+
+    def fake_get(params):
+        llamadas.append(dict(params))
+        if "country" in params:
+            raise _HttpError(422, '{"error":{"detail":"country: invalid value"}}')
+        return {"web": {"results": [
+            {"title": "Termo S/ 79,90", "description": "", "url": "https://x.pe"},
+        ]}}
+
+    monkeypatch.setattr(prov, "_get", fake_get)
+    res = prov.buscar("termo electrico", 10)
+    assert len(res) == 1
+    assert len(llamadas) == 2
+    assert "country" not in llamadas[1]
+    assert llamadas[1]["q"] == "termo electrico"
+
+
+def test_brave_traduce_errores(monkeypatch):
+    from app.valuation.reference import (
+        BraveProvider, ReferenceLimitReached, ReferenceUnavailable, _HttpError,
+    )
+
+    prov = BraveProvider("clave")
+    for codigo, esperado in (
+        (401, ReferenceUnavailable),
+        (402, ReferenceLimitReached),
+        (429, ReferenceLimitReached),
+        (500, ReferenceUnavailable),
+    ):
+        def fake_get(_params, c=codigo):
+            raise _HttpError(c, "detalle de error")
+
+        monkeypatch.setattr(prov, "_get", fake_get)
+        try:
+            prov.buscar("x", 5)
+            raise AssertionError(f"{codigo} debió lanzar")
+        except esperado:
+            pass
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))

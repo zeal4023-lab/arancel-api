@@ -61,6 +61,13 @@ class ProveedorBusqueda(Protocol):
     def buscar(self, consulta: str, cantidad: int) -> list[ResultadoBusqueda]: ...
 
 
+class _HttpError(Exception):
+    def __init__(self, code: int, cuerpo: str) -> None:
+        super().__init__(f"{code}: {cuerpo[:200]}")
+        self.code = code
+        self.cuerpo = cuerpo
+
+
 class BraveProvider:
     """Cliente mínimo de la Web Search API de Brave."""
 
@@ -72,45 +79,78 @@ class BraveProvider:
         self._key = api_key
         self._timeout = max(1.0, timeout)
 
+    @staticmethod
+    def _decodificar(crudo: bytes, encoding: str | None) -> str:
+        if (encoding or "").lower() == "gzip":
+            try:
+                import gzip
+
+                crudo = gzip.decompress(crudo)
+            except OSError:
+                pass
+        return crudo.decode("utf-8", errors="replace")
+
+    def _get(self, params: dict) -> dict:
+        url = f"{self.URL}?{urllib.parse.urlencode(params)}"
+        req = urllib.request.Request(url, headers={
+            "Accept": "application/json",
+            "Accept-Encoding": "gzip",
+            "X-Subscription-Token": self._key,
+            "User-Agent": "arancel-api-reference/1.0",
+        })
+        try:
+            with urllib.request.urlopen(req, timeout=self._timeout) as resp:
+                texto = self._decodificar(resp.read(), resp.headers.get("Content-Encoding"))
+        except urllib.error.HTTPError as exc:
+            raise _HttpError(
+                exc.code,
+                self._decodificar(exc.read(), exc.headers.get("Content-Encoding")),
+            ) from None
+        except Exception as exc:  # red, DNS, timeout
+            raise ReferenceUnavailable(f"No se pudo consultar Brave: {exc}") from exc
+
+        try:
+            return json.loads(texto)
+        except json.JSONDecodeError as exc:
+            raise ReferenceUnavailable(
+                f"Brave devolvió una respuesta ilegible: {texto[:120]}"
+            ) from exc
+
+    @staticmethod
+    def _mapear(exc: _HttpError) -> Exception:
+        detalle = " ".join(exc.cuerpo.split())[:180]
+        if exc.code in (401, 403):
+            return ReferenceUnavailable(f"La clave de Brave no es válida ({exc.code}).")
+        if exc.code == 402:
+            return ReferenceLimitReached(
+                "Se agotaron los créditos de Brave para este período."
+            )
+        if exc.code == 429:
+            return ReferenceLimitReached("Brave rechazó la solicitud por límite de uso.")
+        return ReferenceUnavailable(f"Brave respondió {exc.code}: {detalle}")
+
     def buscar(self, consulta: str, cantidad: int) -> list[ResultadoBusqueda]:
-        params = urllib.parse.urlencode({
+        n = max(1, min(cantidad, 20))
+        completo = {
             "q": consulta,
-            "count": max(1, min(cantidad, 20)),
+            "count": n,
+            # Preferencias de localización: si Brave deja de aceptarlas, el
+            # reintento mínimo de abajo mantiene el servicio funcionando.
             "country": "pe",
             "search_lang": "es",
             "safesearch": "moderate",
-        })
-        req = urllib.request.Request(
-            f"{self.URL}?{params}",
-            headers={
-                "Accept": "application/json",
-                "Accept-Encoding": "gzip",
-                "X-Subscription-Token": self._key,
-                "User-Agent": "arancel-api-reference/1.0",
-            },
-        )
+        }
         try:
-            with urllib.request.urlopen(req, timeout=self._timeout) as resp:
-                crudo = resp.read()
-            if resp.headers.get("Content-Encoding") == "gzip":
-                import gzip
-                crudo = gzip.decompress(crudo)
-            data = json.loads(crudo)
-        except urllib.error.HTTPError as exc:
-            detalle = exc.read().decode(errors="replace")[:200]
-            if exc.code in (401, 403):
-                raise ReferenceUnavailable("La clave de Brave no es válida.") from exc
-            if exc.code == 402:
-                raise ReferenceLimitReached(
-                    "Se agotaron los créditos de Brave para este período."
-                ) from exc
-            if exc.code == 429:
-                raise ReferenceLimitReached(
-                    "Brave rechazó la solicitud por límite de uso."
-                ) from exc
-            raise ReferenceUnavailable(f"Brave respondió {exc.code}: {detalle}") from exc
-        except Exception as exc:  # red, DNS, timeout
-            raise ReferenceUnavailable(f"No se pudo consultar Brave: {exc}") from exc
+            data = self._get(completo)
+        except _HttpError as exc:
+            if exc.code != 422:
+                raise self._mapear(exc) from None
+            log.warning("Brave rechazó los parámetros de localización (422): %s",
+                        " ".join(exc.cuerpo.split())[:160])
+            try:
+                data = self._get({"q": consulta, "count": n})
+            except _HttpError as exc2:
+                raise self._mapear(exc2) from None
 
         resultados = ((data or {}).get("web") or {}).get("results") or []
         salida: list[ResultadoBusqueda] = []
