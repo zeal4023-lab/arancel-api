@@ -383,6 +383,18 @@ def _es_peruano(url: str) -> bool:
     return host.endswith(".pe")
 
 
+def _con_contexto_peru(consulta: str) -> str:
+    """
+    Brave rechaza `country=pe`, así que el contexto se pide en el texto.
+    Sin esto la búsqueda devuelve tiendas de Chile, Argentina o España.
+    """
+    limpio = " ".join(consulta.split())
+    bajo = limpio.lower()
+    if "peru" in bajo or "perú" in bajo:
+        return limpio
+    return f"{limpio} Perú"
+
+
 def consultar_referencia(
     consulta: str,
     *,
@@ -400,8 +412,9 @@ def consultar_referencia(
         raise ReferenceUnavailable("La búsqueda es demasiado corta.")
 
     _consumir_cupo(limite_mensual)
+    consulta_enviada = _con_contexto_peru(consulta)
     try:
-        resultados = _buscar_con_transitorio(consulta, cantidad)
+        resultados = _buscar_con_transitorio(consulta_enviada, cantidad)
     except ReferenceLimitReached as exc:
         _anotar_error(str(exc))
         raise
@@ -428,6 +441,7 @@ def consultar_referencia(
             "ok": True,
             "referencial": True,
             "consulta": consulta,
+            "consulta_enviada": consulta_enviada,
             "rango": None,
             "fuentes": [],
             "resultados_ignorados": ignorados,
@@ -444,6 +458,7 @@ def consultar_referencia(
             "ok": True,
             "referencial": True,
             "consulta": consulta,
+            "consulta_enviada": consulta_enviada,
             "rango": None,
             "fuentes": dominios[:5],
             "resultados_ignorados": ignorados,
@@ -460,6 +475,7 @@ def consultar_referencia(
         "ok": True,
         "referencial": True,
         "consulta": consulta,
+        "consulta_enviada": consulta_enviada,
         # Rango principal: se prefiere soles (moneda local), pero si la tienda
         # publica en dólares se devuelve igual y se etiqueta la moneda.
         "rango": primario,

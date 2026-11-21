@@ -770,5 +770,14 @@ def test_reference_devuelve_ambas_monedas(client):
         ref.limpiar_transitorio()
 
 
+def test_consulta_con_contexto_peru():
+    from app.valuation.reference import _con_contexto_peru
+
+    assert _con_contexto_peru("termo electrico") == "termo electrico Perú"
+    assert _con_contexto_peru("termo electrico Perú") == "termo electrico Perú"
+    assert _con_contexto_peru("termo electrico peru") == "termo electrico peru"
+    assert _con_contexto_peru("  termo   electrico  ") == "termo electrico Perú"
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))
