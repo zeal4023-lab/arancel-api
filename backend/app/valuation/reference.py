@@ -69,9 +69,10 @@ class _HttpError(Exception):
 
 
 class BraveProvider:
-    """Cliente mínimo de la Web Search API de Brave."""
+    """Cliente de Brave. Usa LLM Context (texto de página) con reserva a web."""
 
-    URL = "https://api.search.brave.com/res/v1/web/search"
+    URL_CONTEXT = "https://api.search.brave.com/res/v1/llm/context"
+    URL_WEB = "https://api.search.brave.com/res/v1/web/search"
 
     # Combinaciones de parámetros opcionales, de la más específica a la más
     # simple. Si Brave rechaza una (422), se baja un escalón y se recuerda
@@ -101,8 +102,7 @@ class BraveProvider:
                 pass
         return crudo.decode("utf-8", errors="replace")
 
-    def _get(self, params: dict) -> dict:
-        url = f"{self.URL}?{urllib.parse.urlencode(params)}"
+    def _get(self, url: str) -> dict:
         req = urllib.request.Request(url, headers={
             "Accept": "application/json",
             "Accept-Encoding": "gzip",
@@ -141,12 +141,50 @@ class BraveProvider:
         return ReferenceUnavailable(f"Brave respondió {exc.code}: {detalle}")
 
     def buscar(self, consulta: str, cantidad: int) -> list[ResultadoBusqueda]:
+        """Intenta LLM Context (texto de página); si falla, usa web/search."""
+        try:
+            return self._buscar_contexto(consulta)
+        except ReferenceLimitReached:
+            raise
+        except (ReferenceUnavailable, _HttpError) as exc:
+            log.warning("LLM Context no disponible (%s); se usa web/search.", exc)
+        return self._buscar_web(consulta, cantidad)
+
+    def _buscar_contexto(self, consulta: str) -> list[ResultadoBusqueda]:
+        params = {"q": consulta, "maximum_number_of_tokens": 4096}
+        url = f"{self.URL_CONTEXT}?{urllib.parse.urlencode(params)}"
+        try:
+            data = self._get(url)
+        except _HttpError as exc:
+            if exc.code == 422:
+                # Sin parámetros opcionales por si alguno dejó de ser válido.
+                data = self._get(f"{self.URL_CONTEXT}?{urllib.parse.urlencode({'q': consulta})}")
+            else:
+                raise
+
+        genericos = ((data or {}).get("grounding") or {}).get("generic") or []
+        salida: list[ResultadoBusqueda] = []
+        for g in genericos:
+            if not isinstance(g, dict):
+                continue
+            texto = " ".join(str(s) for s in (g.get("snippets") or []))
+            salida.append(ResultadoBusqueda(
+                titulo=str(g.get("title") or ""),
+                descripcion=texto,
+                url=str(g.get("url") or ""),
+            ))
+        if not salida:
+            raise ReferenceUnavailable("LLM Context no devolvió contenido.")
+        return salida
+
+    def _buscar_web(self, consulta: str, cantidad: int) -> list[ResultadoBusqueda]:
         n = max(1, min(cantidad, 20))
         ultimo: _HttpError | None = None
         for idx in range(BraveProvider._combo_desde, len(self._COMBOS)):
             params = {"q": consulta, "count": n, **self._COMBOS[idx]}
+            url = f"{self.URL_WEB}?{urllib.parse.urlencode(params)}"
             try:
-                data = self._get(params)
+                data = self._get(url)
             except _HttpError as exc:
                 if exc.code == 422:
                     log.warning(

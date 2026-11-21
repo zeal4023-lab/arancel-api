@@ -587,29 +587,65 @@ def test_reference_estima_valor_en_aduana(client):
         ref.limpiar_transitorio()
 
 
-def test_brave_reintenta_sin_localizacion(monkeypatch):
-    """Si Brave rechaza country/search_lang, baja escalón hasta que funcione."""
+def test_brave_contexto_extrae_texto_de_pagina(monkeypatch):
+    """LLM Context devuelve texto real: ahí sí aparecen precios."""
+    from app.valuation.reference import BraveProvider
+
+    prov = BraveProvider("clave")
+
+    def fake_get(url):
+        assert "llm/context" in url
+        return {"grounding": {"generic": [
+            {"url": "https://www.amazon.com/dp/X", "title": "Mouse",
+             "snippets": ["Logitech M185 wireless mouse", "Precio: $19.99"]},
+        ]}}
+
+    monkeypatch.setattr(prov, "_get", fake_get)
+    res = prov._buscar_contexto("logitech m185")
+    assert len(res) == 1
+    assert "$19.99" in res[0].descripcion
+    assert res[0].url.startswith("https://www.amazon.com")
+
+
+def test_brave_cae_a_web_si_contexto_falla(monkeypatch):
+    from app.valuation.reference import BraveProvider, _HttpError
+
+    prov = BraveProvider("clave")
+
+    def fake_get(url):
+        if "llm/context" in url:
+            raise _HttpError(404, "no disponible")
+        return {"web": {"results": [
+            {"title": "Termo S/ 79,90", "description": "", "url": "https://a.pe"},
+        ]}}
+
+    monkeypatch.setattr(prov, "_get", fake_get)
+    res = prov.buscar("termo", 5)
+    assert len(res) == 1
+    assert "79,90" in res[0].titulo
+
+
+def test_brave_web_reintenta_sin_localizacion(monkeypatch):
     from app.valuation.reference import BraveProvider, _HttpError
 
     BraveProvider._combo_desde = 0
     prov = BraveProvider("clave")
-    llamadas = []
+    urls = []
 
-    def fake_get(params):
-        llamadas.append(dict(params))
-        if "country" in params:
+    def fake_get(url):
+        urls.append(url)
+        if "country=" in url:
             raise _HttpError(422, '{"error":{"detail":"country: invalid value"}}')
         return {"web": {"results": [
             {"title": "Termo S/ 79,90", "description": "", "url": "https://x.pe"},
         ]}}
 
     monkeypatch.setattr(prov, "_get", fake_get)
-    res = prov.buscar("termo electrico", 10)
+    res = prov._buscar_web("termo electrico", 10)
     assert len(res) == 1
-    # Dos intentos con country fallan; el tercero (solo search_lang) funciona.
-    assert len(llamadas) == 3
-    assert "country" not in llamadas[-1]
-    assert llamadas[-1]["q"] == "termo electrico"
+    assert len(urls) == 3
+    assert "country=" not in urls[-1]
+    assert "q=termo+electrico" in urls[-1]
     BraveProvider._combo_desde = 0
 
 
@@ -625,12 +661,12 @@ def test_brave_traduce_errores(monkeypatch):
         (429, ReferenceLimitReached),
         (500, ReferenceUnavailable),
     ):
-        def fake_get(_params, c=codigo):
+        def fake_get(_url, c=codigo):
             raise _HttpError(c, "detalle de error")
 
         monkeypatch.setattr(prov, "_get", fake_get)
         try:
-            prov.buscar("x", 5)
+            prov._buscar_web("x", 5)
             raise AssertionError(f"{codigo} debió lanzar")
         except esperado:
             pass
