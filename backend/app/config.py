@@ -81,7 +81,7 @@ class Settings:
     reference_search_enabled: bool = (
         os.getenv("REFERENCE_SEARCH_ENABLED", "false").lower() == "true"
     )
-    brave_api_key: str = os.getenv("BRAVE_API_KEY", "")
+    brave_api_key: str = os.getenv("BRAVE_API_KEY", "").strip()
     # Tope propio, por debajo del crédito gratuito de Brave (~1000/mes).
     reference_monthly_limit: int = _env_int("REFERENCE_MONTHLY_LIMIT", 990)
     reference_timeout_s: float = float(os.getenv("REFERENCE_TIMEOUT_S", "8"))
